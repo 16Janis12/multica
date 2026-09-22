@@ -16,7 +16,7 @@ import (
 // exception and is explained at its line: that CLI works fine, it damages the
 // host it runs on.
 var MinVersions = map[string]string{
-	"antigravity": "1.1.10", // stream-json usage plus reliable headless --model selection
+	"antigravity": "1.0.0", // agy_acp_server ACP server floor (1.1.1 is official)
 	"claude":      "2.0.0",
 	"codex":       "0.100.0", // app-server --listen stdio:// added in 0.100.0
 	"copilot":     "1.0.0",   // --output-format json envelope stable from 1.0.x

@@ -2007,7 +2007,7 @@ func discoverACPModels(ctx context.Context, runtimeCmd Command, p acpDiscoveryPr
 	}
 
 	cmdArgs := p.acpArgs
-	if len(cmdArgs) == 0 {
+	if cmdArgs == nil {
 		cmdArgs = []string{"acp"}
 	}
 	cmd := runtimeCmd.exec(runCtx, cmdArgs...)
@@ -2374,19 +2374,32 @@ func acpModelLabel(name, modelID string) string {
 	return label
 }
 
-// discoverAntigravityModels runs `agy models` and returns the catalog the
-// installed Antigravity CLI advertises (one model record per line).
-//
-// Unlike cursor / pi / opencode there is deliberately NO static fallback.
-// agy's `--model` takes the exact identifier advertised by the installed CLI
-// and silently no-ops on any value it doesn't recognise — empty output, exit
-// 0 — so a guessed static list would risk
-// offering a model the installed CLI can't honour, turning a typo into a
-// "successful" empty run. On any discovery failure we return an empty
-// catalog instead; agent.model stays unset and agy resolves its own
-// default. cachedDiscovery never caches empty results, so this retries on
-// the next request once the cause clears.
+// discoverAntigravityModels discovers models from Google Antigravity. It
+// queries the official ACP server (agy_acp_server) via session/new. When
+// runtimeCmd is explicitly pointed to legacy `agy`, it falls back to
+// `agy models`.
 func discoverAntigravityModels(ctx context.Context, runtimeCmd Command) ([]Model, error) {
+	if runtimeCmd.Path == "agy" || strings.HasSuffix(runtimeCmd.Path, "/agy") {
+		return discoverLegacyAntigravityModels(ctx, runtimeCmd)
+	}
+	models, err := discoverACPModels(ctx, runtimeCmd, acpDiscoveryProvider{
+		defaultBin:   antigravityDefaultExecutable(),
+		clientName:   "multica-model-discovery",
+		tmpdirPrefix: "multica-antigravity-discovery-",
+		acpArgs:      antigravityACPLaunchArgs(),
+	})
+	if err == nil && len(models) > 0 {
+		return models, nil
+	}
+	if runtimeCmd.Path == "" {
+		if _, lookErr := exec.LookPath("agy"); lookErr == nil {
+			return discoverLegacyAntigravityModels(ctx, runtimeCmd)
+		}
+	}
+	return models, err
+}
+
+func discoverLegacyAntigravityModels(ctx context.Context, runtimeCmd Command) ([]Model, error) {
 	if runtimeCmd.Path == "" {
 		runtimeCmd.Path = "agy"
 	}

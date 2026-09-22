@@ -399,12 +399,11 @@ func IsSupportedType(agentType string) bool {
 // no fallback — rather than silently inheriting a guess-based retry. Remove an
 // entry as soon as its backend learns to report rejections.
 var resumeRejectionUndetectable = map[string]bool{
-	"antigravity": true,
-	"copilot":     true,
-	"cursor":      true,
-	"deveco":      true,
-	"opencode":    true,
-	"codearts":    true,
+	"copilot":  true,
+	"cursor":   true,
+	"deveco":   true,
+	"opencode": true,
+	"codearts": true,
 }
 
 // ResumeRejectionUndetectable reports whether agentType is a backend that
@@ -500,7 +499,7 @@ func DetectVersion(ctx context.Context, cmd Command) (string, error) {
 // environment variables are deliberately omitted so the string is a hint
 // about *what* users are extending, not a dump of the full command line.
 var launchHeaders = map[string]string{
-	"antigravity": "agy -p (non-interactive)",
+	"antigravity": "agy_acp_server",
 	"claude":      "claude (stream-json)",
 	"codebuddy":   "codebuddy (stream-json)",
 	"codex":       "codex app-server",

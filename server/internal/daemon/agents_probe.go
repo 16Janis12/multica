@@ -262,11 +262,15 @@ var probeAgentCLIs = func() map[string]AgentEntry {
 	if e, ok := probe("MULTICA_CODEBUDDY_PATH", "codebuddy", "MULTICA_CODEBUDDY_MODEL"); ok {
 		agents["codebuddy"] = e
 	}
-	// agy 1.0.6 added a `--model` flag (MUL-3125), so Antigravity now takes a
-	// model env like every other backend. MULTICA_ANTIGRAVITY_MODEL seeds the
-	// daemon-wide default; its value is the exact `agy models` display string
-	// (e.g. "Claude Opus 4.6 (Thinking)"), not a provider/model slug.
-	if e, ok := probe("MULTICA_ANTIGRAVITY_PATH", "agy", "MULTICA_ANTIGRAVITY_MODEL"); ok {
+	// Antigravity ACP server (agy_acp_server) or legacy agy binary.
+	// MULTICA_ANTIGRAVITY_MODEL seeds the daemon-wide default model.
+	if e, ok := probe("MULTICA_ANTIGRAVITY_PATH", "agy_acp_server", "MULTICA_ANTIGRAVITY_MODEL"); ok {
+		agents["antigravity"] = e
+	} else if e, ok := probe("MULTICA_ANTIGRAVITY_PATH", "agy_acp_server.par", "MULTICA_ANTIGRAVITY_MODEL"); ok {
+		agents["antigravity"] = e
+	} else if e, ok := probe("MULTICA_ANTIGRAVITY_PATH", "antigravity-acp", "MULTICA_ANTIGRAVITY_MODEL"); ok {
+		agents["antigravity"] = e
+	} else if e, ok := probe("MULTICA_ANTIGRAVITY_PATH", "agy", "MULTICA_ANTIGRAVITY_MODEL"); ok {
 		agents["antigravity"] = e
 	}
 	// Qoder CLI ships as the `qodercli` binary (Qoder Desktop does not put it
