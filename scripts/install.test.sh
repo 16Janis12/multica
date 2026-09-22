@@ -509,6 +509,151 @@ STUB
   fi
 }
 
+test_default_repo_points_to_16janis12() {
+  local out
+  out="$(bash "$ROOT_DIR/scripts/install.sh" --help)"
+  if ! echo "$out" | grep -q "16janis12/multica"; then
+    echo "expected 16janis12/multica in install.sh --help output" >&2
+    return 1
+  fi
+}
+
+test_build_flag_compiles_cli_from_source() {
+  local tmp
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+
+  local stub_bin="$tmp/stub-bin"
+  local install_bin="$tmp/install-bin"
+  local fake_src="$tmp/repo"
+  mkdir -p "$stub_bin" "$install_bin" "$fake_src/server/cmd/multica"
+
+  cat >"$fake_src/server/cmd/multica/main.go" <<'GO'
+package main
+func main() {}
+GO
+
+  cat >"$stub_bin/go" <<'STUB'
+#!/usr/bin/env bash
+out=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ -n "$out" ]; then
+  cat >"$out" <<'BIN'
+#!/usr/bin/env bash
+echo "multica 0.0.1-source (commit: test)"
+BIN
+  chmod +x "$out"
+fi
+exit 0
+STUB
+  chmod +x "$stub_bin/go"
+
+  local out="$tmp/install.out"
+  local err="$tmp/install.err"
+  if ! PATH="$stub_bin:$install_bin:/usr/bin:/bin" \
+    MULTICA_BIN_DIR="$install_bin" \
+    MULTICA_SRC_DIR="$fake_src" \
+    bash "$ROOT_DIR/scripts/install.sh" --build >"$out" 2>"$err"; then
+    echo "install.sh --build failed" >&2
+    cat "$out" >&2 || true
+    cat "$err" >&2 || true
+    return 1
+  fi
+
+  if [[ ! -x "$install_bin/multica" ]]; then
+    echo "expected compiled binary at $install_bin/multica" >&2
+    return 1
+  fi
+
+  if ! grep -q "Building Multica CLI from source with Go" "$out"; then
+    echo "expected source build message in installer output" >&2
+    cat "$out" >&2 || true
+    return 1
+  fi
+}
+
+test_binary_download_failure_falls_back_to_source_build() {
+  local tmp
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+
+  local stub_bin="$tmp/stub-bin"
+  local install_bin="$tmp/install-bin"
+  local fake_src="$tmp/repo"
+  mkdir -p "$stub_bin" "$install_bin" "$fake_src/server/cmd/multica"
+
+  cat >"$fake_src/server/cmd/multica/main.go" <<'GO'
+package main
+func main() {}
+GO
+
+  # Stub brew to fail
+  cat >"$stub_bin/brew" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+  chmod +x "$stub_bin/brew"
+
+  # Stub curl to fail on releases/latest
+  cat >"$stub_bin/curl" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+  chmod +x "$stub_bin/curl"
+
+  # Stub go to produce a working binary
+  cat >"$stub_bin/go" <<'STUB'
+#!/usr/bin/env bash
+out=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ -n "$out" ]; then
+  cat >"$out" <<'BIN'
+#!/usr/bin/env bash
+echo "multica 0.0.1-source (commit: test)"
+BIN
+  chmod +x "$out"
+fi
+exit 0
+STUB
+  chmod +x "$stub_bin/go"
+
+  local out="$tmp/install.out"
+  local err="$tmp/install.err"
+  if ! PATH="$stub_bin:$install_bin:/usr/bin:/bin" \
+    MULTICA_BIN_DIR="$install_bin" \
+    MULTICA_SRC_DIR="$fake_src" \
+    bash "$ROOT_DIR/scripts/install.sh" >"$out" 2>"$err"; then
+    echo "install.sh should fall back to source build on binary failure" >&2
+    cat "$out" >&2 || true
+    cat "$err" >&2 || true
+    return 1
+  fi
+
+  if [[ ! -x "$install_bin/multica" ]]; then
+    echo "expected compiled binary at $install_bin/multica" >&2
+    return 1
+  fi
+
+  if ! grep -q "Building Multica CLI from source with Go" "$out"; then
+    echo "expected source build message in installer output" >&2
+    cat "$out" >&2 || true
+    return 1
+  fi
+}
+
+test_default_repo_points_to_16janis12
+test_build_flag_compiles_cli_from_source
+test_binary_download_failure_falls_back_to_source_build
 test_brew_install_failure_falls_back_to_release_binary
 test_brew_tap_failure_falls_back_to_release_binary
 test_remote_ssh_install_prints_token_login_hint

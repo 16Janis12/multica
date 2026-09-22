@@ -98,9 +98,7 @@ func makeFakeAntigravityExecutable(t *testing.T, script string) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "agy_acp_server")
-	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake script: %v", err)
-	}
+	writeTestExecutable(t, binPath, []byte(script))
 	return binPath
 }
 

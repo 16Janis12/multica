@@ -14,10 +14,12 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-REPO_URL="https://github.com/multica-ai/multica.git"
-REPO_WEB_URL="https://github.com/multica-ai/multica"  # without .git, for GitHub web APIs
+DEFAULT_REPO_SLUG="16janis12/multica"
+REPO_SLUG="${MULTICA_REPO:-$DEFAULT_REPO_SLUG}"
+REPO_URL="${MULTICA_REPO_URL:-https://github.com/${REPO_SLUG}.git}"
+REPO_WEB_URL="${MULTICA_REPO_WEB_URL:-https://github.com/${REPO_SLUG}}"  # without .git, for GitHub web APIs
 INSTALL_DIR="${MULTICA_INSTALL_DIR:-$HOME/.multica/server}"
-BREW_PACKAGE="multica-ai/tap/multica"
+BREW_PACKAGE="${MULTICA_BREW_PACKAGE:-multica-ai/tap/multica}"
 
 # Host ports Compose reported after `up -d`; set by setup_server and reused by
 # the summary so the health check and the printed URLs cannot diverge.
@@ -93,7 +95,7 @@ detect_os() {
     Linux)  OS="linux" ;;
     MINGW*|MSYS*|CYGWIN*)
             fail "This script does not support Windows. Use the PowerShell installer instead:
-  irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex" ;;
+  irm https://raw.githubusercontent.com/${REPO_SLUG}/main/scripts/install.ps1 | iex" ;;
     *)      fail "Unsupported operating system: $(uname -s). Multica supports macOS, Linux, and Windows." ;;
   esac
 
@@ -144,40 +146,25 @@ install_cli_brew() {
   fi
 }
 
-install_cli_binary() {
-  info "Installing Multica CLI from GitHub Releases..."
-
-  # Get latest release tag
-  local latest
-  latest=$(curl -sI "$REPO_WEB_URL/releases/latest" 2>/dev/null | grep -i '^location:' | sed 's/.*tag\///' | tr -d '\r\n' || true)
-  if [ -z "$latest" ]; then
-    fail "Could not determine latest release. Check your network connection."
-  fi
-
-  local version="${latest#v}"
-  local url="https://github.com/multica-ai/multica/releases/download/${latest}/multica-cli-${version}-${OS}-${ARCH}.tar.gz"
-  local tmp_dir
-  tmp_dir=$(mktemp -d)
-
-  info "Downloading $url ..."
-  if ! curl -fsSL "$url" -o "$tmp_dir/multica.tar.gz"; then
-    rm -rf "$tmp_dir"
-    fail "Failed to download CLI binary."
-  fi
-
-  tar -xzf "$tmp_dir/multica.tar.gz" -C "$tmp_dir" multica
+_install_binary_to_path() {
+  local src_bin="$1"
+  chmod +x "$src_bin"
 
   # Try /usr/local/bin first, fall back to ~/.local/bin. Tests and scripted
   # installs can override the first choice with MULTICA_BIN_DIR.
   local bin_dir="${MULTICA_BIN_DIR:-/usr/local/bin}"
+  if [ ! -d "$bin_dir" ] && [ -w "$(dirname "$bin_dir" 2>/dev/null || echo ".")" ]; then
+    mkdir -p "$bin_dir" 2>/dev/null || true
+  fi
+
   if [ -w "$bin_dir" ]; then
-    mv "$tmp_dir/multica" "$bin_dir/multica"
+    mv "$src_bin" "$bin_dir/multica"
   elif command_exists sudo; then
-    sudo mv "$tmp_dir/multica" "$bin_dir/multica"
+    sudo mv "$src_bin" "$bin_dir/multica"
   else
     bin_dir="$HOME/.local/bin"
     mkdir -p "$bin_dir"
-    mv "$tmp_dir/multica" "$bin_dir/multica"
+    mv "$src_bin" "$bin_dir/multica"
     chmod +x "$bin_dir/multica"
     # Add to PATH if not already there
     if ! echo "$PATH" | tr ':' '\n' | grep -q "^$bin_dir$"; then
@@ -186,8 +173,107 @@ install_cli_binary() {
     fi
   fi
 
-  rm -rf "$tmp_dir"
   ok "Multica CLI installed to $bin_dir/multica"
+}
+
+install_cli_binary() {
+  info "Installing Multica CLI from GitHub Releases ($REPO_WEB_URL)..."
+
+  # Get latest release tag
+  local latest
+  latest=$(curl -sI "$REPO_WEB_URL/releases/latest" 2>/dev/null | grep -i '^location:' | sed 's/.*tag\///' | tr -d '\r\n' || true)
+  if [ -z "$latest" ]; then
+    warn "Could not determine latest release from $REPO_WEB_URL."
+    return 1
+  fi
+
+  local version="${latest#v}"
+  local url="${REPO_WEB_URL}/releases/download/${latest}/multica-cli-${version}-${OS}-${ARCH}.tar.gz"
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+
+  info "Downloading $url ..."
+  if ! curl -fsSL "$url" -o "$tmp_dir/multica.tar.gz"; then
+    rm -rf "$tmp_dir"
+    warn "Failed to download CLI binary from $url."
+    return 1
+  fi
+
+  if ! tar -xzf "$tmp_dir/multica.tar.gz" -C "$tmp_dir" multica 2>/dev/null; then
+    rm -rf "$tmp_dir"
+    warn "Failed to unpack CLI binary from archive."
+    return 1
+  fi
+
+  _install_binary_to_path "$tmp_dir/multica"
+  rm -rf "$tmp_dir"
+  return 0
+}
+
+install_cli_source() {
+  info "Building Multica CLI from source with Go..."
+  if ! command_exists go; then
+    warn "Go is not installed; cannot build Multica CLI from source."
+    return 1
+  fi
+
+  local src_dir=""
+  local tmp_clone=""
+
+  # Check if running within a local checkout (e.g. ./scripts/install.sh)
+  local script_dir="" root_dir=""
+  if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+    root_dir="$(cd "$script_dir/.." 2>/dev/null && pwd || true)"
+  fi
+
+  if [ -n "$root_dir" ] && [ -f "$root_dir/server/cmd/multica/main.go" ]; then
+    src_dir="$root_dir"
+    info "Using local source at $src_dir..."
+  elif [ -f "$INSTALL_DIR/server/cmd/multica/main.go" ]; then
+    src_dir="$INSTALL_DIR"
+    info "Using repository source at $src_dir..."
+  elif [ -n "${MULTICA_SRC_DIR:-}" ] && [ -f "$MULTICA_SRC_DIR/server/cmd/multica/main.go" ]; then
+    src_dir="$MULTICA_SRC_DIR"
+    info "Using source directory $src_dir..."
+  else
+    info "Cloning $REPO_URL to build CLI from source..."
+    if ! command_exists git; then
+      warn "Git is not installed; cannot clone repository to build from source."
+      return 1
+    fi
+    tmp_clone="$(mktemp -d)"
+    if ! git clone --depth 1 "$REPO_URL" "$tmp_clone"; then
+      rm -rf "$tmp_clone"
+      warn "Failed to clone $REPO_URL."
+      return 1
+    fi
+    src_dir="$tmp_clone"
+  fi
+
+  local build_dir="$src_dir/server"
+  local tmp_bin_dir
+  tmp_bin_dir="$(mktemp -d)"
+  local out_bin="$tmp_bin_dir/multica"
+
+  local ver commit date
+  ver=$(cd "$src_dir" && git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo "dev")
+  commit=$(cd "$src_dir" && git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  info "Compiling multica with go build (version: $ver, commit: $commit)..."
+  if ! (cd "$build_dir" && CGO_ENABLED=0 go build -ldflags "-X main.version=${ver} -X main.commit=${commit} -X main.date=${date}" -o "$out_bin" ./cmd/multica); then
+    [ -n "$tmp_clone" ] && rm -rf "$tmp_clone"
+    rm -rf "$tmp_bin_dir"
+    warn "go build failed for multica CLI."
+    return 1
+  fi
+
+  [ -n "$tmp_clone" ] && rm -rf "$tmp_clone"
+
+  _install_binary_to_path "$out_bin"
+  rm -rf "$tmp_bin_dir"
+  return 0
 }
 
 add_to_path() {
@@ -266,6 +352,15 @@ upgrade_cli_brew() {
 }
 
 install_cli() {
+  if [ "${BUILD_FROM_SOURCE:-false}" = true ] || [ "${MULTICA_BUILD_FROM_SOURCE:-0}" = "1" ]; then
+    install_cli_source || fail "Failed to build and install Multica CLI from source. Check that Go is installed."
+    local bin_dir="${MULTICA_BIN_DIR:-/usr/local/bin}"
+    if ! command_exists multica && [ ! -x "$bin_dir/multica" ]; then
+      fail "CLI built but 'multica' not found on PATH. You may need to restart your shell."
+    fi
+    return 0
+  fi
+
   if command_exists multica; then
     local current_ver
     # `multica version` outputs "multica 0.3.23 (commit: f46b929eb, built: 2026-06-16T10:11:56Z)" — extract just the version
@@ -278,32 +373,38 @@ install_cli() {
     local current_cmp="${current_ver#v}"
     local latest_cmp="${latest_ver#v}"
 
-    if [ -z "$latest_ver" ] || [ "$current_cmp" = "$latest_cmp" ]; then
+    if [ -n "$latest_ver" ] && [ "$current_cmp" = "$latest_cmp" ]; then
       ok "Multica CLI is up to date ($current_ver)"
       return 0
     fi
 
-    info "Multica CLI $current_ver installed, latest is $latest_ver — upgrading..."
-    if command_exists brew && brew list "$BREW_PACKAGE" >/dev/null 2>&1; then
-      upgrade_cli_brew
-    else
-      install_cli_binary
+    if [ -n "$latest_ver" ]; then
+      info "Multica CLI $current_ver installed, latest is $latest_ver — upgrading..."
+      if command_exists brew && brew list "$BREW_PACKAGE" >/dev/null 2>&1; then
+        upgrade_cli_brew
+      else
+        install_cli_binary || install_cli_source || fail "Failed to upgrade Multica CLI."
+      fi
+
+      local new_ver
+      new_ver=$(multica version 2>/dev/null | awk 'NR==1{print $2}' || echo "unknown")
+      ok "Multica CLI upgraded ($current_ver → $new_ver)"
+      return 0
     fi
 
-    local new_ver
-    new_ver=$(multica version 2>/dev/null | awk 'NR==1{print $2}' || echo "unknown")
-    ok "Multica CLI upgraded ($current_ver → $new_ver)"
+    ok "Multica CLI is already installed ($current_ver)"
     return 0
   fi
 
   if command_exists brew; then
-    install_cli_brew || install_cli_binary
+    install_cli_brew || install_cli_binary || install_cli_source || fail "Failed to install Multica CLI. Please install Go to build from source, or check $REPO_WEB_URL."
   else
-    install_cli_binary
+    install_cli_binary || install_cli_source || fail "Failed to install Multica CLI. Please install Go to build from source, or check $REPO_WEB_URL."
   fi
 
   # Verify
-  if ! command_exists multica; then
+  local bin_dir="${MULTICA_BIN_DIR:-/usr/local/bin}"
+  if ! command_exists multica && [ ! -x "$bin_dir/multica" ]; then
     fail "CLI installed but 'multica' not found on PATH. You may need to restart your shell."
   fi
 }
@@ -383,10 +484,15 @@ setup_server() {
   fi
 
   # Start Docker Compose
-  info "Pulling official Multica images..."
-  pull_official_selfhost_images
-  info "Starting Multica services (this may take a few minutes on first run)..."
-  docker compose -f docker-compose.selfhost.yml up -d
+  if [ "${BUILD_FROM_SOURCE:-false}" = true ]; then
+    info "Building Multica services from source..."
+    docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build
+  else
+    info "Pulling official Multica images..."
+    pull_official_selfhost_images
+    info "Starting Multica services (this may take a few minutes on first run)..."
+    docker compose -f docker-compose.selfhost.yml up -d
+  fi
 
   # Read the ports Compose actually published, once, and reuse them for both the
   # health check and the summary so the two can never disagree.
@@ -443,7 +549,7 @@ run_default() {
   printf "\n"
   print_remote_server_token_hint
   printf "  ${BOLD}Self-hosting?${RESET} Install the server first:\n"
-  printf "     curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash -s -- --with-server\n"
+  printf "     curl -fsSL https://raw.githubusercontent.com/${REPO_SLUG}/main/scripts/install.sh | bash -s -- --with-server\n"
   printf "\n"
 }
 
@@ -478,7 +584,7 @@ run_with_server() {
   printf "  or read the generated code from backend logs when Resend is unset.\n"
   printf "\n"
   printf "  ${BOLD}To stop all services:${RESET}\n"
-  printf "     curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash -s -- --stop\n"
+  printf "     curl -fsSL https://raw.githubusercontent.com/${REPO_SLUG}/main/scripts/install.sh | bash -s -- --stop\n"
   printf "\n"
 }
 
@@ -513,24 +619,30 @@ run_stop() {
 # ---------------------------------------------------------------------------
 main() {
   local mode="default"
+  BUILD_FROM_SOURCE=false
 
   while [ $# -gt 0 ]; do
     case "$1" in
       --with-server) mode="with-server" ;;
       --local)       mode="with-server" ;;  # backwards compat alias
       --stop)        mode="stop" ;;
+      --build|--from-source) BUILD_FROM_SOURCE=true ;;
       --help|-h)
-        echo "Usage: install.sh [--with-server | --stop]"
+        echo "Usage: install.sh [--with-server | --stop | --build]"
         echo ""
         echo "  (default)       Install / upgrade the Multica CLI"
         echo "  --with-server   Install CLI + provision a self-host server (Docker)"
+        echo "  --build         Build and install the Multica CLI from Go source"
         echo "  --stop          Stop a self-hosted installation"
         echo ""
         echo "Environment variables:"
+        echo "  MULTICA_REPO          GitHub repository slug (default: 16janis12/multica)"
+        echo "  MULTICA_REPO_URL      Git clone URL for the repository"
+        echo "  MULTICA_REPO_WEB_URL  Web URL for the repository releases and raw files"
+        echo "  MULTICA_BUILD_FROM_SOURCE  Set to 1 to build CLI from Go source"
         echo "  MULTICA_INSTALL_DIR   Self-host server install directory"
         echo "                        (default: \$HOME/.multica/server)"
-        echo "  MULTICA_BIN_DIR       Target directory for the CLI binary when"
-        echo "                        installing from GitHub Releases"
+        echo "  MULTICA_BIN_DIR       Target directory for the CLI binary"
         echo "                        (default: /usr/local/bin, then \$HOME/.local/bin)"
         echo "  MULTICA_SELFHOST_REF  Git ref to check out for self-host assets"
         echo "                        (default: latest release tag, falling back to main)"
