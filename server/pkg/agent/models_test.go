@@ -1640,6 +1640,66 @@ func TestParseAntigravityModelsEmpty(t *testing.T) {
 	}
 }
 
+func TestParseAntigravityACPSessionNewModels(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte(`{
+		"sessionId": "bd6a7c99-19ee-43a5-8419-3988518eaea7",
+		"modes": {
+			"currentModeId": "default",
+			"availableModes": [
+				{"id": "default", "name": "Default", "description": "Default permission prompt flow"},
+				{"id": "auto_edit", "name": "Auto Edit", "description": "Auto-approve file edit tools"},
+				{"id": "yolo", "name": "YOLO", "description": "Auto-approve all tools"}
+			]
+		},
+		"configOptions": [
+			{
+				"id": "model",
+				"name": "Model",
+				"category": "model",
+				"type": "select",
+				"currentValue": "gemini-3.7-flash-high",
+				"options": [
+					{"value": "gemini-3.8-flash-high", "name": "Gemini 3.8 Flash (High)", "description": "gemini-3.8-flash-high"},
+					{"value": "gemini-3.7-flash-high", "name": "Gemini 3.7 Flash (High)", "description": "gemini-3.7-flash-high"}
+				]
+			}
+		],
+		"models": {
+			"availableModels": [
+				{"modelId": "gemini-3.8-flash-high", "name": "Gemini 3.8 Flash (High)", "description": "gemini-3.8-flash-high"},
+				{"modelId": "gemini-3.7-flash-high", "name": "Gemini 3.7 Flash (High)", "description": "gemini-3.7-flash-high"},
+				{"modelId": "gemini-pro-agent", "name": "Gemini 3.1 Pro (High)", "description": "gemini-pro-agent"}
+			],
+			"currentModelId": "gemini-3.7-flash-high"
+		}
+	}`)
+
+	models := parseACPSessionNewModels(raw)
+	if len(models) != 3 {
+		t.Fatalf("parseACPSessionNewModels len = %d, want 3 (%+v)", len(models), models)
+	}
+
+	for i := range models {
+		if models[i].Provider == "" {
+			models[i].Provider = "antigravity"
+		}
+	}
+
+	if models[0].ID != "gemini-3.8-flash-high" || models[0].Label != "Gemini 3.8 Flash (High)" || models[0].Default != false {
+		t.Errorf("model[0] = %+v, want gemini-3.8-flash-high (non-default)", models[0])
+	}
+	if models[1].ID != "gemini-3.7-flash-high" || models[1].Label != "Gemini 3.7 Flash (High)" || models[1].Default != true {
+		t.Errorf("model[1] = %+v, want gemini-3.7-flash-high (default)", models[1])
+	}
+	for i, m := range models {
+		if m.Provider != "antigravity" {
+			t.Errorf("model[%d].Provider = %q, want antigravity", i, m.Provider)
+		}
+	}
+}
+
 func TestCachedDiscovery(t *testing.T) {
 	calls := 0
 	fn := func() (Catalog, error) {

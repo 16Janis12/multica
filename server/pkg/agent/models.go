@@ -2382,11 +2382,27 @@ func discoverAntigravityModels(ctx context.Context, runtimeCmd Command) ([]Model
 	if runtimeCmd.Path == "agy" || strings.HasSuffix(runtimeCmd.Path, "/agy") {
 		return discoverLegacyAntigravityModels(ctx, runtimeCmd)
 	}
+	execPath := runtimeCmd.Path
+	if execPath == "" {
+		execPath = antigravityResolveExecutable()
+	}
+	var extraEnv []string
+	if harnessEnv := ensureAntigravityHarnessEnv(nil, execPath); harnessEnv != nil && harnessEnv["ANTIGRAVITY_HARNESS_PATH"] != "" {
+		extraEnv = append(extraEnv, "ANTIGRAVITY_HARNESS_PATH="+harnessEnv["ANTIGRAVITY_HARNESS_PATH"])
+	}
 	models, err := discoverACPModels(ctx, runtimeCmd, acpDiscoveryProvider{
-		defaultBin:   antigravityDefaultExecutable(),
+		defaultBin:   execPath,
 		clientName:   "multica-model-discovery",
 		tmpdirPrefix: "multica-antigravity-discovery-",
 		acpArgs:      antigravityACPLaunchArgs(),
+		extraEnv:     extraEnv,
+		annotate: func(models []Model, _ json.RawMessage) {
+			for i := range models {
+				if models[i].Provider == "" {
+					models[i].Provider = "antigravity"
+				}
+			}
+		},
 	})
 	if err == nil && len(models) > 0 {
 		return models, nil

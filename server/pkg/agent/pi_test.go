@@ -231,7 +231,7 @@ func TestPiExecuteAttachesStdinPipe(t *testing.T) {
 		"kind=$(stat -c '%F' -L /proc/self/fd/0 2>/dev/null || echo unknown)\n" +
 		"payload=$(cat)\n" +
 		"case \"$kind\" in\n" +
-		"  fifo|*pipe*)\n" +
+		"  [fF][iI][fF][oO]|*[pP][iI][pP][eE]*)\n" +
 		"    if [ \"$payload\" = 'prompt-over-stdin' ]; then\n" +
 		"      printf '%s\\n' '{\"type\":\"agent_start\"}'\n" +
 		"      printf '%s\\n' '{\"type\":\"turn_end\",\"message\":{\"role\":\"assistant\",\"model\":\"test\",\"usage\":{\"input\":1,\"output\":1,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":2}}}'\n" +
