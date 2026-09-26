@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -812,32 +811,4 @@ func (c *APIClient) HealthCheck(ctx context.Context) (string, error) {
 		}
 	}
 	return strings.TrimSpace(string(data)), nil
-}
-
-// CLITokenResponse represents a CLI token returned by the Multica server.
-type CLITokenResponse struct {
-	CLI          string `json:"cli"`
-	Token        string `json:"token"`
-	InstanceURL  string `json:"instance_url,omitempty"`
-	AccountLogin string `json:"account_login,omitempty"`
-}
-
-// FetchCLIToken asks the server to issue or retrieve credentials for a CLI tool (gh, glab, tea).
-func (c *APIClient) FetchCLIToken(ctx context.Context, cliName string) (*CLITokenResponse, error) {
-	reqBody := map[string]any{
-		"cli":          cliName,
-		"workspace_id": c.WorkspaceID,
-	}
-	if c.TaskID != "" {
-		reqBody["task_id"] = c.TaskID
-	}
-	path := "/api/daemon/cli-token"
-	if c.TaskID != "" {
-		path = fmt.Sprintf("/api/daemon/tasks/%s/cli-token", url.PathEscape(c.TaskID))
-	}
-	var resp CLITokenResponse
-	if err := c.PostJSON(ctx, path, reqBody, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
 }

@@ -7899,26 +7899,6 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 			remoteMCPConfig = merged
 		}
 	}
-
-	// Local CLI Setup MCP server (GitHub CLI, GitLab CLI, Gitea CLI).
-	// Exposes the setup_cli tool to the agent.
-	cliSetupConfig, cliSetupServer, cliSetupErr := startTaskCLISetupMCP(
-		ctx, task.ID, task.RemoteMCPDaemonToken, d.client, taskLog,
-	)
-	if cliSetupErr != nil {
-		taskLog.Warn("cli setup tools unavailable", "error", cliSetupErr)
-	}
-	if cliSetupServer != nil {
-		defer cliSetupServer.Close()
-	}
-	if len(cliSetupConfig) > 0 {
-		merged, mergeErr := mergeTaskRemoteMCPConfig(remoteMCPConfig, cliSetupConfig)
-		if mergeErr != nil {
-			taskLog.Warn("could not merge cli setup MCP config", "error", mergeErr)
-		} else {
-			remoteMCPConfig = merged
-		}
-	}
 	if task.Agent != nil {
 		agentMcpConfig = task.Agent.McpConfig
 		effectiveMcpConfig = agentMcpConfig
