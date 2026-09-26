@@ -1536,6 +1536,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		// a secret never sits in a task record.
 		r.Get("/tasks/{id}/plugin-mcp/{contributionId}/credential", h.ResolvePluginMCPCredential)
 
+		// CLI setup token resolution for daemon/agent local CLI setup (gh, glab, tea, etc.)
+		r.Post("/cli-token", h.GetDaemonCLIToken)
+		r.Post("/tasks/{id}/cli-token", h.GetDaemonCLIToken)
+
 		r.Post("/runtimes/{runtimeId}/tasks/claim", h.ClaimTaskByRuntime)
 		// Canonical machine-level batch claim (MUL-4257). `/claim` is a
 		// transitional alias; the daemon coordinator targets the canonical
