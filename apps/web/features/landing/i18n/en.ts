@@ -523,6 +523,25 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.5.6",
+        date: "2026-09-27",
+        title: "Agent candidate pools, daemon-to-server capacity sync, and AntiGravity token discovery",
+        changes: [],
+        features: [
+          "Configure candidate runtime pools and dispatch strategies directly in the agent inspector.",
+          "Daemon-to-server capacity reporting and per-runtime capacity persistence.",
+          "Automatic token discovery for AntiGravity ACP harness via ANTIGRAVITY_TOKEN_PATH and .gemini paths.",
+        ],
+        improvements: [
+          "Graceful error handling and resilient fallbacks for live capacity API queries and UI components.",
+          "Headroom-weighted and least-active-load routing options configurable per agent.",
+        ],
+        fixes: [
+          "Avoid UI blocking and empty card states when prober APIs encounter rate limits or transient network errors.",
+          "Ensure daemon capacity heartbeat properly handles unauthenticated or standalone worker nodes.",
+        ],
+      },
+      {
         version: "0.5.5",
         date: "2026-09-27",
         title: "Dynamic runtime routing, live capacity metrics, and multi-agent usage tracking",

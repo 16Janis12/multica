@@ -508,6 +508,25 @@ export function createZhDict(
     },
     entries: [
       {
+        version: "0.5.6",
+        date: "2026-09-27",
+        title: "智能体候选运行池、Daemon 容量同步与 AntiGravity 凭据自动发现",
+        changes: [],
+        features: [
+          "在智能体检查器中直接配置候选运行环境池与任务分发策略。",
+          "实现 Daemon 向服务端的实时容量上报以及各运行环境的容量持久化存储。",
+          "支持通过 ANTIGRAVITY_TOKEN_PATH 环境变量与 .gemini 目录自动发现 AntiGravity ACP 凭据。",
+        ],
+        improvements: [
+          "增强实时容量 API 与 UI 组件的异常容错与优雅降级能力。",
+          "支持为不同智能体单独配置余量权重调度与最低负载调度选项。",
+        ],
+        fixes: [
+          "修复上游探测接口遭遇速率限制或短暂网络故障时导致界面加载挂起的问题。",
+          "确保未认证或独立运行的节点能够平稳处理 Daemon 容量心跳上报。",
+        ],
+      },
+      {
         version: "0.5.5",
         date: "2026-09-27",
         title: "动态运行环境路由、实时容量指标与多智能体用量追踪",

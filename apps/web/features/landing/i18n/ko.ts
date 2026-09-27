@@ -279,6 +279,25 @@ export function createKoDict(
       },
       entries: [
         {
+          version: "0.5.6",
+          date: "2026-09-27",
+          title: "에이전트 후보 풀, 데몬-서버 용량 동기화 및 AntiGravity 토큰 자동 검색",
+          changes: [],
+          features: [
+            "에이전트 인스펙터에서 후보 런타임 풀과 디스패치 전략을 직접 구성할 수 있습니다.",
+            "데몬에서 서버로의 실시간 용량 보고 및 런타임별 용량 영구 저장을 구현했습니다.",
+            "ANTIGRAVITY_TOKEN_PATH 및 .gemini 경로를 통한 AntiGravity ACP 토큰 자동 검색을 지원합니다.",
+          ],
+          improvements: [
+            "실시간 용량 API 쿼리 및 UI 컴포넌트의 오류 처리와 복원력 있는 폴백을 강화했습니다.",
+            "에이전트별로 여유 용량 가중치(headroom-weighted) 및 최소 부하(least-active-load) 라우팅을 지정할 수 있습니다.",
+          ],
+          fixes: [
+            "프로버 API가 속도 제한이나 일시적 오류에 도달했을 때 UI가 멈추거나 차단되지 않도록 수정했습니다.",
+            "인증되지 않았거나 독립 실행형 워커 노드에서도 데몬 용량 하트비트가 안전하게 동작하도록 보완했습니다.",
+          ],
+        },
+        {
           version: "0.5.5",
           date: "2026-09-27",
           title: "동적 런타임 라우팅, 실시간 용량 지표 및 멀티 에이전트 사용량 추적",
