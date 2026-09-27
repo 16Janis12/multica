@@ -4,11 +4,11 @@ import {
   fireEvent,
   render as rtlRender,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactElement } from "react";
 import type { Attachment } from "@multica/core/types";
-import { collectImageSequence } from "@multica/core/attachments/image-sequence";
 
 const { downloadMock, getBaseUrlMock, toastErrorMock } = vi.hoisted(() => ({
   downloadMock: vi.fn(),
@@ -52,9 +52,6 @@ const STRINGS: Record<string, Record<string, string>> = {
     view: "View",
     copy_link: "Copy link",
     canvas_label: "Image canvas",
-    previous: "Previous image",
-    next: "Next image",
-    sequence_position: "{{index}} / {{total}}",
     unavailable: "That image is no longer available — skipped it.",
   },
   canvas: {
@@ -67,6 +64,11 @@ const STRINGS: Record<string, Record<string, string>> = {
     close: "Close",
     preview_unsupported: "This file type can't be previewed.",
     open_in_new_tab: "Open in new tab",
+    previous: "Previous",
+    next: "Next",
+    sequence_position: "{{index}} / {{total}}",
+    overview: "All deliverables",
+    info: "Info",
   },
 };
 
@@ -84,9 +86,10 @@ vi.mock("../i18n", () => ({
 }));
 
 import {
-  ImageSequenceProvider,
-  useImageSequencePreview,
-} from "./image-sequence-context";
+  PreviewSequenceProvider,
+  collectPreviewSequence,
+  usePreviewSequence,
+} from "./preview-sequence-context";
 import { Attachment as InlineAttachment } from "./attachment";
 import { AttachmentDownloadProvider } from "./attachment-download-context";
 
@@ -124,13 +127,30 @@ function imageAttachment(n: number): Attachment {
 const THREE = [imageAttachment(1), imageAttachment(2), imageAttachment(3)];
 
 // Each attachment lands in its own block, mirroring three comments each
-// carrying one screenshot.
+// carrying one file.
 function sequenceOf(attachments: Attachment[]) {
-  return collectImageSequence(attachments.map((a) => ({ attachments: [a] })));
+  return collectPreviewSequence(attachments.map((a) => ({ attachments: [a] })));
+}
+
+// jsdom has no Image.decode(); the viewer swaps images without one, so the
+// decode-then-swap path only runs under a stub. Returns the restore.
+function stubDecode(impl: (this: HTMLImageElement) => Promise<void>): () => void {
+  Object.defineProperty(HTMLImageElement.prototype, "decode", {
+    configurable: true,
+    writable: true,
+    value: impl,
+  });
+  return () => {
+    delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
+  };
+}
+
+function fileAttachment(n: number, filename: string, contentType: string): Attachment {
+  return { ...imageAttachment(n), filename, content_type: contentType };
 }
 
 function Opener({ openKey }: { openKey: string }) {
-  const sequence = useImageSequencePreview();
+  const sequence = usePreviewSequence();
   return (
     <button type="button" onClick={() => sequence.openAt(openKey)}>
       open
@@ -144,22 +164,22 @@ function expectCounter(text: string) {
 }
 
 function prevButton(): HTMLButtonElement {
-  return screen.getByRole("button", { name: "Previous image" });
+  return screen.getByRole("button", { name: "Previous" });
 }
 function nextButton(): HTMLButtonElement {
-  return screen.getByRole("button", { name: "Next image" });
+  return screen.getByRole("button", { name: "Next" });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("ImageSequenceProvider", () => {
+describe("PreviewSequenceProvider", () => {
   it("opens at the clicked image's real position and reports X / Y", () => {
     render(
-      <ImageSequenceProvider items={sequenceOf(THREE)}>
+      <PreviewSequenceProvider items={sequenceOf(THREE)}>
         <Opener openKey={THREE[1]!.id} />
-      </ImageSequenceProvider>,
+      </PreviewSequenceProvider>,
     );
 
     act(() => {
@@ -175,9 +195,9 @@ describe("ImageSequenceProvider", () => {
 
   it("walks forward and back without wrapping, disabling at each end", () => {
     render(
-      <ImageSequenceProvider items={sequenceOf(THREE)}>
+      <PreviewSequenceProvider items={sequenceOf(THREE)}>
         <Opener openKey={THREE[0]!.id} />
-      </ImageSequenceProvider>,
+      </PreviewSequenceProvider>,
     );
     act(() => {
       fireEvent.click(screen.getByText("open"));
@@ -209,9 +229,9 @@ describe("ImageSequenceProvider", () => {
 
   it("moves with the left / right arrow keys", () => {
     render(
-      <ImageSequenceProvider items={sequenceOf(THREE)}>
+      <PreviewSequenceProvider items={sequenceOf(THREE)}>
         <Opener openKey={THREE[0]!.id} />
-      </ImageSequenceProvider>,
+      </PreviewSequenceProvider>,
     );
     act(() => {
       fireEvent.click(screen.getByText("open"));
@@ -238,7 +258,7 @@ describe("ImageSequenceProvider", () => {
     function Harness() {
       const [items, setItems] = useState(sequenceOf(THREE));
       return (
-        <ImageSequenceProvider items={items}>
+        <PreviewSequenceProvider items={items}>
           <Opener openKey={THREE[2]!.id} />
           <button
             type="button"
@@ -248,7 +268,7 @@ describe("ImageSequenceProvider", () => {
           >
             grow
           </button>
-        </ImageSequenceProvider>
+        </PreviewSequenceProvider>
       );
     }
     render(<Harness />);
@@ -267,9 +287,9 @@ describe("ImageSequenceProvider", () => {
 
   it("skips a broken image and says so", () => {
     render(
-      <ImageSequenceProvider items={sequenceOf(THREE)}>
+      <PreviewSequenceProvider items={sequenceOf(THREE)}>
         <Opener openKey={THREE[0]!.id} />
-      </ImageSequenceProvider>,
+      </PreviewSequenceProvider>,
     );
     act(() => {
       fireEvent.click(screen.getByText("open"));
@@ -293,10 +313,132 @@ describe("ImageSequenceProvider", () => {
     expectCounter("1 / 3");
   });
 
+  it("pages onto files that are not images", () => {
+    const mixed = [
+      imageAttachment(1),
+      fileAttachment(2, "spec.pdf", "application/pdf"),
+      imageAttachment(3),
+    ];
+    render(
+      <PreviewSequenceProvider items={sequenceOf(mixed)}>
+        <Opener openKey={mixed[0]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    act(() => {
+      fireEvent.click(screen.getByText("open"));
+    });
+
+    act(() => {
+      fireEvent.click(nextButton());
+    });
+    expectCounter("2 / 3");
+    expect(screen.getByTitle("spec.pdf").tagName).toBe("IFRAME");
+
+    act(() => {
+      fireEvent.click(nextButton());
+    });
+    expectCounter("3 / 3");
+    expect(screen.getByRole("dialog").querySelector("img")).not.toBeNull();
+  });
+
+  it("leaves the arrow keys to a focused video", () => {
+    const mixed = [
+      fileAttachment(1, "demo.mp4", "video/mp4"),
+      imageAttachment(2),
+    ];
+    render(
+      <PreviewSequenceProvider items={sequenceOf(mixed)}>
+        <Opener openKey={mixed[0]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    act(() => {
+      fireEvent.click(screen.getByText("open"));
+    });
+
+    const video = screen.getByRole("dialog").querySelector("video")!;
+    act(() => {
+      fireEvent.keyDown(video, { key: "ArrowRight" });
+    });
+    // The player seeks; the viewer stays put.
+    expectCounter("1 / 2");
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "ArrowRight" });
+    });
+    expectCounter("2 / 2");
+  });
+
+  // Review of #8763: the panel is reused across kinds, so the frame it held
+  // for a PDF must never reach the image canvas while the next image decodes.
+  it("shows the image itself, not the previous file, while it decodes", () => {
+    const restoreDecode = stubDecode(() => new Promise<void>(() => {}));
+    try {
+      const mixed = [
+        fileAttachment(1, "spec.pdf", "application/pdf"),
+        imageAttachment(2),
+        imageAttachment(3),
+      ];
+      render(
+        <PreviewSequenceProvider items={sequenceOf(mixed)}>
+          <Opener openKey={mixed[0]!.id} />
+        </PreviewSequenceProvider>,
+      );
+      act(() => {
+        fireEvent.click(screen.getByText("open"));
+      });
+      act(() => {
+        fireEvent.click(nextButton());
+      });
+
+      const image = screen.getByRole("dialog").querySelector("img")!;
+      expect(image.getAttribute("src")).toBe(mixed[1]!.download_url);
+      expectCounter("2 / 3");
+      expect(nextButton()).not.toBeDisabled();
+      expect(toastErrorMock).not.toHaveBeenCalled();
+    } finally {
+      restoreDecode();
+    }
+  });
+
+  it("does not blame the next image for an error on the frame still held", async () => {
+    const [first, second] = [imageAttachment(1), imageAttachment(2)];
+    const restoreDecode = stubDecode(function (this: HTMLImageElement) {
+      return this.src === first.download_url
+        ? Promise.resolve()
+        : new Promise<void>(() => {});
+    });
+    try {
+      render(
+        <PreviewSequenceProvider items={sequenceOf([first, second])}>
+          <Opener openKey={first.id} />
+        </PreviewSequenceProvider>,
+      );
+      act(() => {
+        fireEvent.click(screen.getByText("open"));
+      });
+      await act(async () => {});
+      act(() => {
+        fireEvent.click(nextButton());
+      });
+
+      // The first image stays up while the second decodes; an error from it
+      // is about the first file, not the one being opened.
+      const held = screen.getByRole("dialog").querySelector("img")!;
+      expect(held.getAttribute("src")).toBe(first.download_url);
+      act(() => {
+        fireEvent.error(held);
+      });
+      expectCounter("2 / 2");
+      expect(toastErrorMock).not.toHaveBeenCalled();
+    } finally {
+      restoreDecode();
+    }
+  });
+
   it("reports false for an image the surface does not know", () => {
     const seen: boolean[] = [];
     function Probe() {
-      const sequence = useImageSequencePreview();
+      const sequence = usePreviewSequence();
       return (
         <button
           type="button"
@@ -307,9 +449,9 @@ describe("ImageSequenceProvider", () => {
       );
     }
     render(
-      <ImageSequenceProvider items={sequenceOf(THREE)}>
+      <PreviewSequenceProvider items={sequenceOf(THREE)}>
         <Probe />
-      </ImageSequenceProvider>,
+      </PreviewSequenceProvider>,
     );
     act(() => {
       fireEvent.click(screen.getByText("try"));
@@ -320,15 +462,148 @@ describe("ImageSequenceProvider", () => {
 
   it("leaves a lone image with no sequence chrome", () => {
     render(
-      <ImageSequenceProvider items={sequenceOf([THREE[0]!])}>
+      <PreviewSequenceProvider items={sequenceOf([THREE[0]!])}>
         <Opener openKey={THREE[0]!.id} />
-      </ImageSequenceProvider>,
+      </PreviewSequenceProvider>,
     );
     act(() => {
       fireEvent.click(screen.getByText("open"));
     });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Next image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  });
+});
+
+// What the issue page layers on top of the generic viewer (MUL-7649): an
+// info panel, "show in comments", a way to the overview, a version switcher.
+describe("host details", () => {
+  function openFirst() {
+    act(() => {
+      fireEvent.click(screen.getByText("open"));
+    });
+  }
+
+  it("toggles the info panel with I and lets its controls move the viewer", () => {
+    render(
+      <PreviewSequenceProvider
+        items={sequenceOf(THREE)}
+        describeItem={(item, controls) => ({
+          info: (
+            <button type="button" onClick={() => controls.goTo(THREE[2]!.id)}>
+              {`about ${item.filename}`}
+            </button>
+          ),
+        })}
+      >
+        <Opener openKey={THREE[0]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    openFirst();
+    expect(screen.queryByRole("complementary", { name: "Info" })).toBeNull();
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "i" });
+    });
+    expect(screen.getByRole("complementary", { name: "Info" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Info" })).toHaveAttribute("aria-pressed", "true");
+
+    act(() => {
+      fireEvent.click(screen.getByText("about shot-1.png"));
+    });
+    expectCounter("3 / 3");
+    // The panel follows the file on screen.
+    expect(screen.getByText("about shot-3.png")).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "I" });
+    });
+    expect(screen.queryByRole("complementary", { name: "Info" })).toBeNull();
+  });
+
+  it("closes the viewer, then locates", async () => {
+    const onSelect = vi.fn();
+    render(
+      <PreviewSequenceProvider
+        items={sequenceOf(THREE)}
+        describeItem={() => ({ locate: { label: "Show in comments", onSelect } })}
+      >
+        <Opener openKey={THREE[0]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    openFirst();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show in comments" }));
+    });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("hands the overview the file on screen when G is pressed", async () => {
+    const onOpenOverview = vi.fn();
+    render(
+      <PreviewSequenceProvider items={sequenceOf(THREE)} onOpenOverview={onOpenOverview}>
+        <Opener openKey={THREE[1]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    openFirst();
+    expect(screen.getByRole("button", { name: "All deliverables" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      "G",
+    );
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "g" });
+    });
+    expect(onOpenOverview).toHaveBeenCalledWith(THREE[1]!.id);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("offers no overview or info controls to a surface without them", () => {
+    render(
+      <PreviewSequenceProvider items={sequenceOf(THREE)}>
+        <Opener openKey={THREE[0]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    openFirst();
+    expect(screen.queryByRole("button", { name: "All deliverables" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Info" })).toBeNull();
+  });
+
+  it("leaves letter keys to a field and every key to an open menu", () => {
+    const onOpenOverview = vi.fn();
+    render(
+      <PreviewSequenceProvider
+        items={sequenceOf(THREE)}
+        onOpenOverview={onOpenOverview}
+        describeItem={() => ({
+          titleAccessory: (
+            <>
+              <input aria-label="field" />
+              <div role="menu">
+                <button type="button">v1</button>
+              </div>
+            </>
+          ),
+        })}
+      >
+        <Opener openKey={THREE[0]!.id} />
+      </PreviewSequenceProvider>,
+    );
+    openFirst();
+
+    act(() => {
+      fireEvent.keyDown(screen.getByLabelText("field"), { key: "g" });
+    });
+    expect(onOpenOverview).not.toHaveBeenCalled();
+
+    const menuItem = screen.getByRole("button", { name: "v1" });
+    act(() => {
+      fireEvent.keyDown(menuItem, { key: "ArrowRight" });
+      fireEvent.keyDown(menuItem, { key: "Escape" });
+    });
+    expectCounter("1 / 3");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
 
@@ -344,8 +619,8 @@ describe("body images with no attachment record", () => {
       .join("\n\n");
     return (
       <AttachmentDownloadProvider attachments={[]}>
-        <ImageSequenceProvider
-          items={collectImageSequence([{ content, attachments: [] }])}
+        <PreviewSequenceProvider
+          items={collectPreviewSequence([{ content, attachments: [] }])}
         >
           {captions.map((caption, i) => (
             <InlineAttachment
@@ -358,7 +633,7 @@ describe("body images with no attachment record", () => {
               }}
             />
           ))}
-        </ImageSequenceProvider>
+        </PreviewSequenceProvider>
       </AttachmentDownloadProvider>
     );
   }
@@ -395,11 +670,11 @@ describe("body images with no attachment record", () => {
   });
 });
 
-describe("useImageSequencePreview without a provider", () => {
+describe("usePreviewSequence without a provider", () => {
   it("reports false so the caller can fall back to a single preview", () => {
     const seen: boolean[] = [];
     function Probe() {
-      const sequence = useImageSequencePreview();
+      const sequence = usePreviewSequence();
       return (
         <button type="button" onClick={() => seen.push(sequence.openAt("k"))}>
           try

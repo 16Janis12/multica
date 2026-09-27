@@ -2,69 +2,35 @@
 
 Product contracts the runtime brief does not fully encode.
 
-- [PR linking and close intent are two distinct contracts](#pr-linking-and-close-intent-are-two-distinct-contracts)
+- [PR linking](#pr-linking)
 - [Reading a linked PR's real state](#reading-a-linked-prs-real-state)
 - [Custom properties: typed workflow state](#custom-properties-typed-workflow-state)
 - [Status changes have server side effects](#status-changes-have-server-side-effects)
 - [Who else is running right now](#who-else-is-running-right-now)
 - [Sub-issues: todo starts work now, backlog parks it](#sub-issues-todo-starts-work-now-backlog-parks-it)
+- [Charts and files in a comment](#charts-and-files-in-a-comment)
 - [Incorrect to correct](#incorrect-to-correct)
 
-## PR linking and close intent are two distinct contracts
+To attach a local file to an existing issue description, use `multica issue update <id> --attachment <local-path>`. The CLI appends the file's Markdown reference to the end of the description; to replace an image, also use `--description-file` to remove the old reference. Do not put local filesystem paths in the description.
 
-The GitHub webhook runs two separate scans over an incoming PR. They are not the
-same gate and they read different fields.
+## PR linking
 
-**Linking** scans three places for a routable issue key (`PREFIX-NUMBER`, e.g.
-`MUL-123`): the PR **title**, the **branch name**, and the **body right after a
-closing keyword**. Each match writes an issue to PR link row — the link that
-`multica issue pull-requests` reads back. A key that appears in the body as a
-bare mention, with nothing in the title or branch and no closing keyword, is a
-passing reference and links nothing.
-
-```text
-MUL-123: add the thing the issue asks for        # key anywhere in title → links
-agent/dana/mul-123-add-the-thing             # branch ref   → links
-Closes MUL-123                                   # body + closing keyword → links
-Related to MUL-123                               # body mention only → no link
-```
-
-**Close intent** is stricter and is a separate scan over **title or body only —
-never the branch**. It fires only for a key placed immediately after a closing
-keyword (`Closes` / `Fixes` / `Resolves`, optional `:` then whitespace). That
-adjacency is what sets the link row's close-intent flag, the gate that
-auto-advances the issue to `done` when the PR merges.
+A PR is linked to an issue when its **title** or **branch name** contains a
+routable issue key (`PREFIX-NUMBER`, e.g. `MUL-123`), or when its title or body
+puts the key **right after a closing keyword** (`Closes` / `Fixes` /
+`Resolves`, optional `:` then whitespace). A key that appears in the body as a
+bare mention links nothing. People can also link a PR by URL or remove one on
+the issue page; a removed PR is not linked again by later webhooks.
 
 ```text
-Closes MUL-123                                    # links AND records close intent
-Fixes MUL-123
-Resolves MUL-123
-Fix login MUL-123                                 # in a title: links, no close intent
+MUL-123: add the thing the issue asks for     # key in title  → links
+agent/dana/mul-123-add-the-thing              # key in branch → links
+Closes MUL-123   (body)                       # key after a keyword → links
+Related to MUL-123   (body only)              # no link
 ```
 
-Consequence: a bare key in the title or a branch reference links the PR but does
-not close the issue on merge. A closing keyword immediately adjacent to the issue key
-records close intent; on merge, that close intent can move the linked issue to
-`done`.
-
-**Passing mentions link nothing.** A key that appears **only** as a bare mention
-in the body — no closing keyword, and not in the title or branch — does not link
-the PR at all. This keeps `Related MUL-123` or `Follow up in MUL-123` from
-surfacing an unrelated PR as if it were working on that issue. To make a PR show
-up for an issue, put the key in the title, the branch, or after a closing keyword
-in the body — not as a loose body reference.
-
-While the PR is still open the link follows the live title and body: adding a key
-links it, and downgrading that key to a plain mention drops the link. Once the PR
-has merged or closed, existing links and their close-intent decision are frozen —
-but a PR that was never linked can still be linked by editing it, so a forgotten
-key is repairable after the fact. That late link does not move the issue to
-`done`; close intent is decided at merge time.
-
-```text
-Closes MUL-123 in the body                        # links
-Related to MUL-123 in the body (no title/branch)  # no link
-```
+While a PR is open, its automatic links follow the live title, branch, and
+body: removing the key drops the link. After merge or close, existing links stay.
 
 ### Default for code-changing issue work
 
@@ -77,12 +43,10 @@ instead of pretending the run is complete.
 
 To make the PR show on the issue, put a routable issue key in the PR **title**
 (preferred) or the **branch**. A key that appears only as a bare mention in the
-body links nothing. Do not use a closing keyword (`Closes` / `Fixes` /
-`Resolves`) unless the issue should auto-advance to `done` on merge.
+body links nothing.
 
 ```text
-MUL-123: fix login redirect        # key anywhere in title → links
-Closes MUL-123                     # only when merge should mark the issue done
+MUL-123: fix login redirect        # key in title → links
 Part of MUL-123                    # body mention only → no link at all
 ```
 
@@ -100,9 +64,11 @@ an earlier run.
 multica issue pull-requests <issue-id> --output json
 ```
 
-Returns `{"pull_requests": [...]}`. Each element exposes:
+Returns `{"pull_requests": [...], ...}`. Each element of `pull_requests` exposes:
 
 - `number`, `html_url`, `title`
+- `link_source` — why the PR is on the issue: `title`, `branch`, `manual`, or
+  `auto` (any other automatic link, such as a closing keyword in the body).
 - `state` — the PR lifecycle as a **single enum**, one of `merged`, `closed`,
   `draft`, `open`. There is no separate `draft` or `merged` boolean in the
   response; the server folds them into `state` (merged wins, then closed, then
@@ -127,10 +93,10 @@ So "is it merged?" is `state == "merged"` (or `merged_at != null`); "is it still
 a draft?" is `state == "draft"`; coarse CI status is `checks_conclusion`.
 
 If the command returns no linked PRs after a PR was opened, check the syntax
-first: the scanner needs a routable issue key in the PR title or branch, or one
-right after a closing keyword in the body — a bare body mention does not count
-(see the passing-mention rule above). When the syntax is the problem, editing the
-title or adding a closing keyword re-runs the scan.
+first: the key must be in the PR title or branch, or right after a closing
+keyword in the body — a bare body mention does not count. When the syntax is the
+problem, editing the title re-runs the scan. If a person removed
+the PR from the issue, it stays removed until someone links it again.
 
 If the key is already written correctly and the list is still empty, stop editing
 the PR blind: another no-op edit cannot fix an integration that never received the
@@ -269,13 +235,19 @@ archived statuses remain readable via an explicit status filter.
   later re-trigger confirms the overall goal is met.
 - **`in_review`** is an accepted issue status. Some workflows use it while a PR
   is open and awaiting review; moving to it is an explicit mutation.
-- **`done`** on a child issue posts a system comment on its parent. If a PR
-  carries close intent (`Closes MUL-XXXX`), it advances the issue to `done`
-  itself on merge — you do not also need to flip it manually.
+- **`done`** on a child issue posts a system comment on its parent.
 - **`cancelled`** is a terminal, user-driven decision to close the issue. Like
   `done` it enqueues no new agent work, but it does **not** stop tasks already in
   flight — a run in progress keeps going. To stop a running task, cancel the
   task itself.
+  A cancelled issue may also be marked as a **duplicate** of another issue
+  (`GET /api/issues/<id>/duplicates` shows both sides; issue responses carry
+  the original as `duplicate_of` with its id, identifier, title and status
+  while the mark counts). Moving it to any
+  status other than `cancelled` removes the mark, so reopen a duplicate only
+  when it is really separate work. Marking logs `duplicate_marked` on the
+  duplicate and `duplicate_added` on the original; removing the mark logs
+  `duplicate_unmarked` / `duplicate_removed` (`multica issue timeline --action`).
 - **Failed issue-triggered tasks** may roll an issue from `in_progress` back to
   `todo` when no active task / retry remains — that is the main server-owned
   status write on the agent-run path.
@@ -376,6 +348,39 @@ terminal children.
 Read each sub-issue's description before promoting and only promote items whose
 stated dependencies are met; if a description conflicts with the parent's
 breakdown, leave it `backlog` and comment to confirm first.
+
+## Charts and files in a comment
+
+Where content goes decides how it shows:
+
+- **In the body, rendered in place** — a fenced ` ```html ` or ` ```mermaid `
+  block in the comment content. It renders inside the comment with a title
+  bar (Preview / Source, fullscreen, copy) and takes its content's height;
+  anything taller than 480px collapses behind "Show all". Name it with
+  `title="..."` on the fence line. HTML runs in a scripts-only sandbox (no
+  cookies, storage or parent access; CDN `<script src>` works).
+- **An attached file** — `--attachment <path>`. Every non-image file shows as
+  a file card that opens in the viewer, **HTML included**: an uploaded
+  `report.html` is a deliverable to open, not an inline chart. Use it for
+  something the reader keeps or downloads.
+
+For HTML that should follow light / dark mode, style it with the page's theme
+variables: `var(--background)`, `var(--foreground)`, `var(--muted)`,
+`var(--muted-foreground)`, `var(--border)`, `var(--primary)`,
+`var(--chart-1)` … `var(--chart-5)`, `var(--font-sans)`. Using any of them opts
+the block into the app's color scheme, so also set the page background
+(`body { background: var(--background); color: var(--foreground) }`). HTML
+that uses none keeps its own look. Size to the content, not the viewport:
+`100vh` heights have no fixed viewport to fill here.
+
+````markdown
+```html title="p95 latency, last 7 days"
+<canvas id="c"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>/* draw with getComputedStyle(document.documentElement)
+  .getPropertyValue("--chart-1") so it follows the theme */</script>
+```
+````
 
 ## Incorrect to correct
 
