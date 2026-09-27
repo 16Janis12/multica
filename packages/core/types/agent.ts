@@ -94,6 +94,39 @@ export interface RuntimeDevice {
 export type AgentRuntime = RuntimeDevice;
 
 // ---------------------------------------------------------------------------
+// Runtime Capacity & Live Quota (Approach A)
+// ---------------------------------------------------------------------------
+
+export type CapacityTier =
+  | "AMPLE"
+  | "LOW"
+  | "CRITICAL"
+  | "EXHAUSTED"
+  | "UNKNOWN";
+
+export interface RuntimeWindowMetrics {
+  id: string;
+  label: string;
+  used_percent: number;
+  remaining_percent: number;
+  resets_at?: string | null;
+  time_until_reset?: string | null;
+  tier: CapacityTier;
+}
+
+export interface RuntimeCapacitySnapshot {
+  provider: string;
+  effective_tier: CapacityTier;
+  session_5h?: RuntimeWindowMetrics;
+  weekly_7d?: RuntimeWindowMetrics;
+  reset_credits?: number;
+  model_buckets?: Record<string, RuntimeWindowMetrics>;
+  checked_at: string;
+  error?: string;
+  supported?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Custom runtime profiles (MUL-3284)
 //
 // A RuntimeProfile is a workspace-level *definition* of a custom runtime

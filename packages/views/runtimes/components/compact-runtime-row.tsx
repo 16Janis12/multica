@@ -1,6 +1,7 @@
 import { cn } from "@multica/ui/lib/utils";
 import type { AgentRuntime } from "@multica/core/types";
-import { runtimeDisplayName } from "@multica/core/runtimes";
+import { runtimeDisplayName, runtimeCapacityOptions } from "@multica/core/runtimes";
+import { useQuery } from "@tanstack/react-query";
 import { ProviderLogo } from "./provider-logo";
 import { useT } from "../../i18n";
 
@@ -25,6 +26,7 @@ export function CompactRuntimeRow({
 }) {
   const { t: tAgents } = useT("agents");
   const online = runtime.status === "online";
+  const { data: capacity } = useQuery(runtimeCapacityOptions(runtime.id));
   return (
     // A real button rather than role="button": it brings disabled, focus, and
     // Enter/Space for free. The hand-rolled keydown branch this replaces did
@@ -49,7 +51,25 @@ export function CompactRuntimeRow({
         <div className="truncate text-body font-medium">
           {runtimeDisplayName(runtime)}
         </div>
-        <div className="text-caption text-muted-foreground">{runtime.provider}</div>
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
+          <span>{runtime.provider}</span>
+          {capacity?.session_5h && (
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-micro font-medium uppercase",
+                capacity.effective_tier === "AMPLE"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : capacity.effective_tier === "LOW"
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : capacity.effective_tier === "CRITICAL"
+                      ? "bg-orange-500/15 text-orange-600 dark:text-orange-400"
+                      : "bg-destructive/10 text-destructive",
+              )}
+            >
+              {capacity.effective_tier} 5h: {capacity.session_5h.remaining_percent.toFixed(0)}%
+            </span>
+          )}
+        </div>
       </div>
       <span
         className={cn(

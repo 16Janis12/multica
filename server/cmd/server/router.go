@@ -2305,6 +2305,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/", h.ListAgentRuntimes)
 				r.Route("/{runtimeId}", func(r chi.Router) {
 					r.Patch("/", h.UpdateAgentRuntime)
+					r.Get("/capacity", h.GetRuntimeCapacity)
 					r.Get("/usage", h.GetRuntimeUsage)
 					r.Get("/usage/by-agent", h.GetRuntimeUsageByAgent)
 					r.Get("/usage/by-hour", h.GetRuntimeUsageByHour)
