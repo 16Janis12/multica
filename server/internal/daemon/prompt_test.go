@@ -1,10 +1,13 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/multica-ai/multica/server/pkg/runtimeusage"
 
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 	"github.com/multica-ai/multica/server/internal/service"
@@ -2234,5 +2237,39 @@ func TestBuildPromptIssueStateFallsBackToTheRead(t *testing.T) {
 				t.Errorf("nothing may claim the issue is unchanged here, got:\n%s", out)
 			}
 		})
+	}
+}
+
+type mockQuotaProber struct{}
+
+func (m *mockQuotaProber) Provider() string { return "test-quota-provider" }
+func (m *mockQuotaProber) Probe(ctx context.Context, opts runtimeusage.ProbeOptions) (*runtimeusage.RuntimeUsageSnapshot, error) {
+	session := runtimeusage.NewWindowMetrics("5h", "5-Hour Session", 0.85, nil)
+	weekly := runtimeusage.NewWindowMetrics("7d", "Weekly Limit", 0.40, nil)
+	return &runtimeusage.RuntimeUsageSnapshot{
+		Provider:      "test-quota-provider",
+		Session5h:     &session,
+		Weekly7d:      &weekly,
+		EffectiveTier: runtimeusage.CapacityLow,
+	}, nil
+}
+
+func TestBuildPromptInjectsRuntimeQuotaWhenAvailable(t *testing.T) {
+	runtimeusage.Default.Register(&mockQuotaProber{})
+
+	task := issueStateTask("issue-quota-1")
+	out := BuildPrompt(task, "test-quota-provider")
+
+	if !strings.Contains(out, "## Current Runtime Quota") {
+		t.Fatalf("expected prompt to contain runtime quota block, got:\n%s", out)
+	}
+	if !strings.Contains(out, "5-Hour Session: 85.0% remaining") {
+		t.Errorf("expected 5h session metrics, got:\n%s", out)
+	}
+	if !strings.Contains(out, "7-Day Weekly:   40.0% remaining") {
+		t.Errorf("expected 7d weekly metrics, got:\n%s", out)
+	}
+	if !strings.Contains(out, "running low") {
+		t.Errorf("expected low quota warning, got:\n%s", out)
 	}
 }
