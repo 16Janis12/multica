@@ -69,12 +69,22 @@ func (p *AntigravityProber) Provider() string {
 }
 
 func (p *AntigravityProber) findTokenFile() string {
+	if envPath := os.Getenv("ANTIGRAVITY_TOKEN_PATH"); envPath != "" {
+		if _, err := os.Stat(envPath); err == nil {
+			return envPath
+		}
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
 
 	patterns := []string{
+		filepath.Join(home, ".gemini", "antigravity-acp", "acp_token.json"),
+		filepath.Join(home, ".gemini", "*", "acp_token.json"),
+		filepath.Join(home, ".gemini", "acp_token.json"),
+		"/root/.gemini/antigravity-acp/acp_token.json",
 		filepath.Join(home, ".t3", "userdata", "providers", "antigravity", "*", "antigravity-acp", "acp_token.json"),
 		filepath.Join(home, ".config", "antigravity", "acp_token.json"),
 		filepath.Join(home, ".antigravity", "acp_token.json"),
