@@ -201,7 +201,10 @@ func (s *TaskService) resolveOptimalRuntimeWithProvider(
 		var remPercent float64 = 100.0
 
 		if capProvider != nil {
-			snap := capProvider.GetSnapshot(ctx, rt.Provider, model)
+			snap := runtimeusage.Default.GetRuntimeSnapshot(rtIDStr)
+			if snap == nil {
+				snap = capProvider.GetSnapshot(ctx, rt.Provider, model)
+			}
 			if snap != nil {
 				tier = snap.EffectiveTier
 				remPercent = extractRemainingPercent(snap)

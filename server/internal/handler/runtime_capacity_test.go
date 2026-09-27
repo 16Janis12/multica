@@ -81,3 +81,35 @@ func TestGetRuntimeCapacity_Unauthenticated(t *testing.T) {
 		t.Fatalf("expected non-200 code for unauthenticated request, got %d", w.Code)
 	}
 }
+
+func TestRuntimeCapacity_DaemonReportStoreAndLookup(t *testing.T) {
+	testRuntimeID := "test-rt-capacity-123"
+	snap := &runtimeusage.RuntimeUsageSnapshot{
+		Provider:      "antigravity",
+		EffectiveTier: runtimeusage.CapacityLow,
+		Session5h: &runtimeusage.WindowMetrics{
+			RemainingPercent: 15.7,
+			Tier:             runtimeusage.CapacityLow,
+		},
+		Weekly7d: &runtimeusage.WindowMetrics{
+			RemainingPercent: 30.2,
+			Tier:             runtimeusage.CapacityLow,
+		},
+		CheckedAt: time.Now().UTC(),
+	}
+
+	runtimeusage.Default.SetRuntimeSnapshot(testRuntimeID, snap)
+	retrieved := runtimeusage.Default.GetRuntimeSnapshot(testRuntimeID)
+	if retrieved == nil {
+		t.Fatal("expected retrieved snapshot to not be nil")
+	}
+	if retrieved.EffectiveTier != runtimeusage.CapacityLow {
+		t.Errorf("expected EffectiveTier LOW, got %v", retrieved.EffectiveTier)
+	}
+	if retrieved.Session5h.RemainingPercent != 15.7 {
+		t.Errorf("expected Session5h 15.7%%, got %v", retrieved.Session5h.RemainingPercent)
+	}
+	if retrieved.Weekly7d.RemainingPercent != 30.2 {
+		t.Errorf("expected Weekly7d 30.2%%, got %v", retrieved.Weekly7d.RemainingPercent)
+	}
+}

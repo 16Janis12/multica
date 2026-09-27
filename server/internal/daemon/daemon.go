@@ -35,6 +35,7 @@ import (
 	"github.com/multica-ai/multica/server/pkg/protocol"
 	"github.com/multica-ai/multica/server/pkg/redact"
 	"github.com/multica-ai/multica/server/pkg/skillbundle"
+	"github.com/multica-ai/multica/server/pkg/runtimeusage"
 	"github.com/multica-ai/multica/server/pkg/taskfailure"
 )
 
@@ -4460,6 +4461,7 @@ func (d *Daemon) heartbeatLoop(ctx context.Context) {
 			rctx, rcancel := context.WithCancel(ctx)
 			cancels[rid] = rcancel
 			go d.runRuntimeHeartbeat(rctx, rid)
+			go d.runRuntimeCapacityReporting(rctx, rid)
 		}
 	}
 
@@ -10628,4 +10630,49 @@ func defaultArgsForProvider(cfg Config, provider string) []string {
 		return nil
 	}
 	return append([]string(nil), args...)
+}
+
+// runRuntimeCapacityReporting probes the local provider quota for the runtime
+// and periodically reports the capacity snapshot to the server.
+func (d *Daemon) runRuntimeCapacityReporting(ctx context.Context, rid string) {
+	report := func() {
+		rt := d.findRuntime(rid)
+		if rt == nil {
+			return
+		}
+
+		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		snap := runtimeusage.Default.GetSnapshot(probeCtx, rt.Provider, "")
+		if snap == nil {
+			return
+		}
+
+		if err := d.client.ReportRuntimeCapacity(probeCtx, rid, snap); err != nil {
+			d.logger.Debug("failed to report runtime capacity", "runtime_id", rid, "provider", rt.Provider, "error", err)
+		} else {
+			d.logger.Debug("reported runtime capacity to server", "runtime_id", rid, "provider", rt.Provider, "tier", snap.EffectiveTier)
+		}
+	}
+
+	// Initial report after a short delay (1s) so startup doesn't block
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(1 * time.Second):
+		report()
+	}
+
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			report()
+		}
+	}
 }

@@ -764,6 +764,11 @@ func (c *Client) ReportLocalSkillImportResult(ctx context.Context, runtimeID, re
 	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/local-skills/import/%s/result", runtimeID, requestID), result, nil)
 }
 
+// ReportRuntimeCapacity sends the runtime's capacity snapshot back to the server.
+func (c *Client) ReportRuntimeCapacity(ctx context.Context, runtimeID string, snapshot any) error {
+	return c.postJSON(ctx, fmt.Sprintf("/api/daemon/runtimes/%s/capacity", runtimeID), snapshot, nil)
+}
+
 // WorkspaceInfo holds minimal workspace metadata returned by the API.
 type WorkspaceInfo struct {
 	ID   string `json:"id"`

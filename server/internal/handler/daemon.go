@@ -36,6 +36,7 @@ import (
 	"github.com/multica-ai/multica/server/pkg/protocol"
 	"github.com/multica-ai/multica/server/pkg/redact"
 	"github.com/multica-ai/multica/server/pkg/skillbundle"
+	"github.com/multica-ai/multica/server/pkg/runtimeusage"
 	"github.com/multica-ai/multica/server/pkg/taskfailure"
 )
 
@@ -6101,4 +6102,22 @@ func (h *Handler) GetTaskGCCheck(w http.ResponseWriter, r *http.Request) {
 		"status":       task.Status,
 		"completed_at": task.CompletedAt.Time,
 	})
+}
+
+// ReportRuntimeCapacity receives the quota/capacity snapshot from the daemon for a specific runtime.
+func (h *Handler) ReportRuntimeCapacity(w http.ResponseWriter, r *http.Request) {
+	runtimeID := chi.URLParam(r, "runtimeId")
+	if _, ok := h.requireDaemonRuntimeAccess(w, r, runtimeID); !ok {
+		return
+	}
+
+	var snap runtimeusage.RuntimeUsageSnapshot
+	if err := json.NewDecoder(r.Body).Decode(&snap); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid capacity payload: "+err.Error())
+		return
+	}
+
+	snap.ComputeEffectiveTier()
+	runtimeusage.Default.SetRuntimeSnapshot(runtimeID, &snap)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

@@ -115,7 +115,12 @@ func (h *Handler) GetRuntimeCapacity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	model := r.URL.Query().Get("model")
-	snap := runtimeusage.Default.GetSnapshot(r.Context(), rt.Provider, model)
+	// 1. Prefer capacity snapshot reported directly by the daemon running this runtime
+	snap := runtimeusage.Default.GetRuntimeSnapshot(runtimeID)
+	// 2. Fall back to local prober (e.g. single-host or local dev setups)
+	if snap == nil {
+		snap = runtimeusage.Default.GetSnapshot(r.Context(), rt.Provider, model)
+	}
 	if snap == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"provider":       rt.Provider,
