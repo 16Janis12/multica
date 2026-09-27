@@ -523,6 +523,36 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.5.4",
+        date: "2026-09-27",
+        title: "Dynamic blocks & deliverables, full attachment viewer, steer from composer, and Claude Opus 5.5",
+        changes: [],
+        features: [
+          "Inspect Issue deliverables and dynamic blocks in a dedicated overview grid and viewer info panel.",
+          "Browse attachments in a full viewer with CSV tables, JSON/YAML trees, numbered code, and interactive HTML previews.",
+          "Address bar and URL controls for HTML attachment previews.",
+          "Steer a running agent directly from the composer, customizable per recipient.",
+          "Choose the status an Issue moves to when linked pull requests are merged.",
+          "List Claude Opus 5.5 and GPT-6 Sol/Luna in fallback catalogs.",
+          "Show repository descriptions in project pickers.",
+        ],
+        improvements: [
+          "Desktop window toolbar left-aligns Back, Forward, and sidebar controls.",
+          "Give every reply a tick marker on the thread rail.",
+          "Show all attached images at full size in comments.",
+          "Upgraded editor to Tiptap 3.31.3 with improved select-all and deletion.",
+          "State a failed or cancelled run once directly in the thread.",
+        ],
+        fixes: [
+          "Keep the run spinner active when a steer action moves an Issue.",
+          "Render chat tool rows properly when MCP input fields are objects.",
+          "Paginate task history and accurately aggregate run duration.",
+          "Ignore malformed member mention IDs without interrupting notification delivery.",
+          "Avoid hook tool name collisions in plugins.",
+          "Answer unreadable WeCom messages once per message rather than once per delivery.",
+        ],
+      },
+      {
         version: "0.5.3",
         date: "2026-09-24",
         title: "Telegram media, Simplified Chinese on mobile, Issue and PR auto-complete, and truer usage figures",

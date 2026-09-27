@@ -1,4 +1,4 @@
-.PHONY: help makehelp dev server daemon cli multica build test migrate-up migrate-down sqlc seed clean setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree remove-worktree db-up db-down db-drop db-reset selfhost selfhost-build selfhost-stop up down status list destroy gc env-exec api-dev web-dev desktop-dev
+.PHONY: help makehelp dev server daemon cli multica build build-all release test migrate-up migrate-down sqlc seed clean setup start stop check worktree-env setup-main start-main stop-main check-main setup-worktree start-worktree stop-worktree check-worktree remove-worktree db-up db-down db-drop db-reset selfhost selfhost-build selfhost-stop up down status list destroy gc env-exec api-dev web-dev desktop-dev
 
 MAIN_ENV_FILE ?= .env
 WORKTREE_ENV_FILE ?= .env.worktree
@@ -340,6 +340,17 @@ build: ## Build the server, CLI, and migrate binaries into server/bin
 	cd server && go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT)" -o bin/server$(EXE) ./cmd/server
 	cd server && go build -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)" -o bin/multica$(EXE) ./cmd/multica
 	cd server && go build -o bin/migrate$(EXE) ./cmd/migrate
+
+build-all: build ## Build Go binaries and all frontend workspace packages
+	pnpm build
+
+release: build-all ## Build all release artifacts (Go binaries, frontend packages, and CLI archives)
+	@if command -v goreleaser >/dev/null 2>&1; then \
+		echo "==> Building multi-platform release archives with GoReleaser..."; \
+		goreleaser release --snapshot --clean --skip=publish; \
+	else \
+		echo "==> goreleaser not found; skipping multi-platform release archive generation"; \
+	fi
 
 test: ## Run Go tests after ensuring the target DB exists and migrations are applied
 	$(REQUIRE_ENV)
