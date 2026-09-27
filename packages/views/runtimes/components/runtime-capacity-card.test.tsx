@@ -43,6 +43,7 @@ const mockRuntime: AgentRuntime = {
   daemon_id: "daemon-123",
   name: "Antigravity Node",
   runtime_mode: "local",
+  launch_header: "",
   provider: "antigravity",
   status: "online",
   device_info: "host.local",
