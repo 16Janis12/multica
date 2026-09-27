@@ -1267,7 +1267,7 @@ func (s *TaskService) enqueueIssueTaskWithCommentPlan(ctx context.Context, issue
 		slog.Debug("task enqueue skipped: agent is archived", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agent.ID))
 		return db.AgentTaskQueue{}, fmt.Errorf("agent is archived")
 	}
-	if !agent.RuntimeID.Valid {
+	if !agent.RuntimeID.Valid && len(agent.RuntimeCandidateIds) == 0 {
 		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", "agent has no runtime")
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
@@ -1288,10 +1288,15 @@ func (s *TaskService) enqueueIssueTaskWithCommentPlan(ctx context.Context, issue
 	originatorUserID := attr.UserID
 	runtimeMCPOverlay := s.buildRuntimeMCPOverlay(ctx, originatorUserID, agent)
 	attrSource, attrDelegatedFrom, attrEvidenceKind, attrEvidenceRef := attributionCreateParams(attr)
+	targetRuntimeID, err := s.resolveAgentTaskRuntime(ctx, agent, issue.ID)
+	if err != nil {
+		slog.Error("task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
+		return db.AgentTaskQueue{}, err
+	}
 	createParams := db.CreateAgentTaskParams{
 		ID:                   dbid.NewV7(),
 		AgentID:              issue.AssigneeID,
-		RuntimeID:            agent.RuntimeID,
+		RuntimeID:            targetRuntimeID,
 		IssueID:              issue.ID,
 		Priority:             priorityToInt(issue.Priority),
 		TriggerCommentID:     triggerCommentID,
@@ -1439,7 +1444,7 @@ func (s *TaskService) enqueueMentionTaskWithCommentPlan(ctx context.Context, iss
 		slog.Debug("mention task enqueue skipped: agent is archived", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
 		return db.AgentTaskQueue{}, fmt.Errorf("agent is archived")
 	}
-	if !agent.RuntimeID.Valid {
+	if !agent.RuntimeID.Valid && len(agent.RuntimeCandidateIds) == 0 {
 		slog.Error("mention task enqueue failed: agent has no runtime", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
@@ -1459,10 +1464,15 @@ func (s *TaskService) enqueueMentionTaskWithCommentPlan(ctx context.Context, iss
 	originatorUserID := attr.UserID
 	runtimeMCPOverlay := s.buildRuntimeMCPOverlay(ctx, originatorUserID, agent)
 	attrSource, attrDelegatedFrom, attrEvidenceKind, attrEvidenceRef := attributionCreateParams(attr)
+	targetRuntimeID, err := s.resolveAgentTaskRuntime(ctx, agent, issue.ID)
+	if err != nil {
+		slog.Error("mention task enqueue failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
+		return db.AgentTaskQueue{}, err
+	}
 	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 		ID:                   dbid.NewV7(),
 		AgentID:              agentID,
-		RuntimeID:            agent.RuntimeID,
+		RuntimeID:            targetRuntimeID,
 		IssueID:              issue.ID,
 		Priority:             priorityToInt(issue.Priority),
 		TriggerCommentID:     triggerCommentID,
@@ -1586,7 +1596,7 @@ func (s *TaskService) enqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	if agent.ArchivedAt.Valid {
 		return db.AgentTaskQueue{}, fmt.Errorf("agent is archived")
 	}
-	if !agent.RuntimeID.Valid {
+	if !agent.RuntimeID.Valid && len(agent.RuntimeCandidateIds) == 0 {
 		return db.AgentTaskQueue{}, fmt.Errorf("agent has no runtime")
 	}
 
@@ -1640,11 +1650,15 @@ func (s *TaskService) enqueueQuickCreateTask(ctx context.Context, workspaceID, r
 	}
 	attrSource, _, attrEvidenceKind, attrEvidenceRef := attributionCreateParams(attr)
 	runtimeMCPOverlay := s.buildRuntimeMCPOverlay(ctx, requesterID, agent)
+	targetRuntimeID, err := s.resolveAgentTaskRuntime(ctx, agent, pgtype.UUID{})
+	if err != nil {
+		return db.AgentTaskQueue{}, err
+	}
 	taskID := dbid.NewV7()
 	createParams := db.CreateQuickCreateTaskParams{
 		ID:                   taskID,
 		AgentID:              agentID,
-		RuntimeID:            agent.RuntimeID,
+		RuntimeID:            targetRuntimeID,
 		Priority:             priorityToInt("high"),
 		Context:              contextJSON,
 		OriginatorUserID:     requesterID,
@@ -1859,7 +1873,7 @@ func (s *TaskService) PrepareChatTaskEnqueue(
 	if agent.ArchivedAt.Valid {
 		return PreparedChatTaskEnqueue{}, ErrChatTaskAgentArchived
 	}
-	if !agent.RuntimeID.Valid {
+	if !agent.RuntimeID.Valid && len(agent.RuntimeCandidateIds) == 0 {
 		return PreparedChatTaskEnqueue{}, ErrChatTaskAgentNoRuntime
 	}
 
@@ -2000,7 +2014,7 @@ func (s *TaskService) enqueueChatTaskTx(
 	if agent.ArchivedAt.Valid {
 		return db.AgentTaskQueue{}, ErrChatTaskAgentArchived
 	}
-	if !agent.RuntimeID.Valid {
+	if !agent.RuntimeID.Valid && len(agent.RuntimeCandidateIds) == 0 {
 		return db.AgentTaskQueue{}, ErrChatTaskAgentNoRuntime
 	}
 
@@ -2057,10 +2071,11 @@ func (s *TaskService) enqueueChatTaskTx(
 		mediaPendingUntil = pgtype.Timestamptz{}
 	}
 
+	chatRuntimeID, _ := s.resolveAgentTaskRuntime(ctx, agent, pgtype.UUID{})
 	task, err := qtx.CreateChatTask(ctx, db.CreateChatTaskParams{
 		ID:                   dbid.NewV7(),
 		AgentID:              chatSession.AgentID,
-		RuntimeID:            agent.RuntimeID,
+		RuntimeID:            chatRuntimeID,
 		Priority:             2,
 		ChatSessionID:        chatSession.ID,
 		InitiatorUserID:      initiatorUserID,
@@ -6267,7 +6282,7 @@ func loadDelegatedFailureRecoveryTarget(ctx context.Context, q *db.Queries, fail
 		}
 		return nil, fmt.Errorf("load source agent: %w", err)
 	}
-	if agent.ArchivedAt.Valid || !agent.RuntimeID.Valid || agent.WorkspaceID != issue.WorkspaceID {
+	if agent.ArchivedAt.Valid || (!agent.RuntimeID.Valid && len(agent.RuntimeCandidateIds) == 0) || agent.WorkspaceID != issue.WorkspaceID {
 		return nil, nil
 	}
 	return &delegatedFailureRecoveryTarget{failed: failed, source: source, issue: issue, agent: agent}, nil
@@ -6618,10 +6633,11 @@ func (s *TaskService) dispatchDelegatedFailureRecovery(ctx context.Context, targ
 			ruleVersionID = target.source.RuleVersionID
 		}
 		overlay := s.buildRuntimeMCPOverlay(ctx, originator, target.agent)
+		recRuntimeID, _ := s.resolveAgentTaskRuntime(ctx, target.agent, target.issue.ID)
 		task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
 			ID:                   dbid.NewV7(),
 			AgentID:              target.agent.ID,
-			RuntimeID:            target.agent.RuntimeID,
+			RuntimeID:            recRuntimeID,
 			IssueID:              target.issue.ID,
 			Priority:             priorityToInt(target.issue.Priority),
 			TriggerCommentID:     target.comment.ID,

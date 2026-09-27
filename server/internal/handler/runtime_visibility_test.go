@@ -309,6 +309,7 @@ func TestPrivateRuntimeReadEndpointsHideKnownRuntimeFromNonOwners(t *testing.T) 
 		handle func(http.ResponseWriter, *http.Request)
 		params []string
 	}{
+		{"capacity", http.MethodGet, "/api/runtimes/" + runtimeID + "/capacity", testHandler.GetRuntimeCapacity, []string{"runtimeId", runtimeID}},
 		{"usage", http.MethodGet, "/api/runtimes/" + runtimeID + "/usage", testHandler.GetRuntimeUsage, []string{"runtimeId", runtimeID}},
 		{"activity", http.MethodGet, "/api/runtimes/" + runtimeID + "/activity", testHandler.GetRuntimeTaskActivity, []string{"runtimeId", runtimeID}},
 		{"usage by agent", http.MethodGet, "/api/runtimes/" + runtimeID + "/usage/by-agent", testHandler.GetRuntimeUsageByAgent, []string{"runtimeId", runtimeID}},

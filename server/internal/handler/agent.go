@@ -132,6 +132,8 @@ type AgentResponse struct {
 	// mirroring the existing mcp_config redaction contract.
 	ComposioToolkitAllowlist         []string               `json:"composio_toolkit_allowlist,omitempty"`
 	ComposioToolkitAllowlistRedacted bool                   `json:"composio_toolkit_allowlist_redacted,omitempty"`
+	RuntimeCandidateIDs              []string               `json:"runtime_candidate_ids"`
+	RoutingStrategy                  string                 `json:"routing_strategy"`
 	OwnerID                          *string                `json:"owner_id"`
 	Skills                           []AgentSkillSummary    `json:"skills"`
 	DisabledRuntimeSkills            []DisabledRuntimeSkill `json:"disabled_runtime_skills"`
@@ -206,11 +208,24 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 	// owner-only gate below can decide.
 	composioAllowlist := a.ComposioToolkitAllowlist
 
+	candidateIDs := make([]string, 0, len(a.RuntimeCandidateIds))
+	for _, cid := range a.RuntimeCandidateIds {
+		if cid.Valid {
+			candidateIDs = append(candidateIDs, uuidToString(cid))
+		}
+	}
+	routingStrategy := a.RoutingStrategy
+	if routingStrategy == "" {
+		routingStrategy = "capacity_headroom"
+	}
+
 	return AgentResponse{
 		ID:                       uuidToString(a.ID),
 		WorkspaceID:              uuidToString(a.WorkspaceID),
 		RuntimeID:                uuidToString(a.RuntimeID),
-		RuntimeBound:             a.RuntimeID.Valid,
+		RuntimeBound:             a.RuntimeID.Valid || len(candidateIDs) > 0,
+		RuntimeCandidateIDs:      candidateIDs,
+		RoutingStrategy:          routingStrategy,
 		Name:                     a.Name,
 		Description:              a.Description,
 		Instructions:             a.Instructions,
@@ -1325,7 +1340,9 @@ type CreateAgentRequest struct {
 	Template string `json:"template"`
 	// SkillIDs are attached inside the same transaction as the agent row so a
 	// create never becomes visible in a partially configured state.
-	SkillIDs []string `json:"skill_ids"`
+	SkillIDs            []string  `json:"skill_ids"`
+	RuntimeCandidateIDs *[]string `json:"runtime_candidate_ids"`
+	RoutingStrategy     *string   `json:"routing_strategy"`
 }
 
 func decodeJSONBodyWithRawFields(body io.Reader, dst any) (map[string]json.RawMessage, error) {
@@ -1563,6 +1580,21 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 	qtx := h.Queries.WithTx(tx)
 
+	var candidateUUIDs []pgtype.UUID
+	if req.RuntimeCandidateIDs != nil {
+		for _, cid := range *req.RuntimeCandidateIDs {
+			parsed, ok := parseUUIDOrBadRequest(w, cid, "runtime_candidate_ids")
+			if !ok {
+				return
+			}
+			candidateUUIDs = append(candidateUUIDs, parsed)
+		}
+	}
+	routingStrategy := "capacity_headroom"
+	if req.RoutingStrategy != nil && *req.RoutingStrategy != "" {
+		routingStrategy = *req.RoutingStrategy
+	}
+
 	created, err := qtx.CreateAgent(r.Context(), db.CreateAgentParams{
 		WorkspaceID:              wsUUID,
 		Name:                     req.Name,
@@ -1584,6 +1616,8 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		ServiceTier:              pgtype.Text{String: req.ServiceTier, Valid: req.ServiceTier != ""},
 		ConversationStarters:     sp,
 		ComposioToolkitAllowlist: allowlist,
+		RuntimeCandidateIds:      candidateUUIDs,
+		RoutingStrategy:          routingStrategy,
 	})
 	if err != nil {
 		// Unique constraint on (workspace_id, name) — return a clear conflict error
@@ -1700,6 +1734,8 @@ type UpdateAgentRequest struct {
 	// null" (a *[]string can't, because a nil pointer is the same wire
 	// representation as both). MUL-3869.
 	ComposioToolkitAllowlist *[]string `json:"composio_toolkit_allowlist"`
+	RuntimeCandidateIDs      *[]string `json:"runtime_candidate_ids"`
+	RoutingStrategy          *string   `json:"routing_strategy"`
 }
 
 // workspaceAlwaysRedactSecrets reports whether the workspace has opted
@@ -1906,6 +1942,25 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	params := db.UpdateAgentParams{
 		ID: existing.ID,
+	}
+	shouldClearCandidateIDs := false
+	if _, hasCandidates := rawFields["runtime_candidate_ids"]; hasCandidates {
+		if req.RuntimeCandidateIDs == nil {
+			shouldClearCandidateIDs = true
+		} else {
+			var candidateUUIDs []pgtype.UUID
+			for _, cid := range *req.RuntimeCandidateIDs {
+				parsed, ok := parseUUIDOrBadRequest(w, cid, "runtime_candidate_ids")
+				if !ok {
+					return
+				}
+				candidateUUIDs = append(candidateUUIDs, parsed)
+			}
+			params.RuntimeCandidateIds = candidateUUIDs
+		}
+	}
+	if req.RoutingStrategy != nil && *req.RoutingStrategy != "" {
+		params.RoutingStrategy = pgtype.Text{String: *req.RoutingStrategy, Valid: true}
 	}
 	if req.Name != nil {
 		params.Name = pgtype.Text{String: *req.Name, Valid: true}
@@ -2265,6 +2320,14 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Warn("clear agent thinking_level failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 			writeError(w, http.StatusInternalServerError, "failed to clear thinking_level: "+err.Error())
+			return
+		}
+	}
+	if shouldClearCandidateIDs {
+		updated, err = h.Queries.ClearAgentRuntimeCandidateIDs(r.Context(), updated.ID)
+		if err != nil {
+			slog.Warn("clear agent runtime_candidate_ids failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+			writeError(w, http.StatusInternalServerError, "failed to clear runtime_candidate_ids: "+err.Error())
 			return
 		}
 	}

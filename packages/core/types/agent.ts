@@ -94,6 +94,39 @@ export interface RuntimeDevice {
 export type AgentRuntime = RuntimeDevice;
 
 // ---------------------------------------------------------------------------
+// Runtime Capacity & Live Quota (Approach A)
+// ---------------------------------------------------------------------------
+
+export type CapacityTier =
+  | "AMPLE"
+  | "LOW"
+  | "CRITICAL"
+  | "EXHAUSTED"
+  | "UNKNOWN";
+
+export interface RuntimeWindowMetrics {
+  id: string;
+  label: string;
+  used_percent: number;
+  remaining_percent: number;
+  resets_at?: string | null;
+  time_until_reset?: string | null;
+  tier: CapacityTier;
+}
+
+export interface RuntimeCapacitySnapshot {
+  provider: string;
+  effective_tier: CapacityTier;
+  session_5h?: RuntimeWindowMetrics;
+  weekly_7d?: RuntimeWindowMetrics;
+  reset_credits?: number;
+  model_buckets?: Record<string, RuntimeWindowMetrics>;
+  checked_at: string;
+  error?: string;
+  supported?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Custom runtime profiles (MUL-3284)
 //
 // A RuntimeProfile is a workspace-level *definition* of a custom runtime
@@ -621,6 +654,10 @@ export interface Agent {
   updated_at: string;
   archived_at: string | null;
   archived_by: string | null;
+  /** Candidate runtime IDs for dynamic quota/capacity pooling (routing pool). */
+  runtime_candidate_ids?: string[];
+  /** Dynamic routing strategy: "capacity_headroom" (default) or "least_busy". */
+  routing_strategy?: "capacity_headroom" | "least_busy" | string;
 }
 
 export interface AgentConversationStarter {
@@ -695,6 +732,10 @@ export interface CreateAgentRequest {
   template?: string;
   /** Workspace skill IDs attached atomically with the agent row. */
   skill_ids?: string[];
+  /** Candidate runtime IDs for dynamic quota/capacity pooling. */
+  runtime_candidate_ids?: string[];
+  /** Dynamic routing strategy: "capacity_headroom" or "least_busy". */
+  routing_strategy?: "capacity_headroom" | "least_busy" | string;
 }
 
 export interface AgentBuilderSession {
@@ -813,6 +854,10 @@ export interface UpdateAgentRequest {
   status?: AgentStatus;
   max_concurrent_tasks?: number;
   model?: string;
+  /** Candidate runtime IDs for dynamic quota/capacity pooling (pass null or [] to clear). */
+  runtime_candidate_ids?: string[] | null;
+  /** Dynamic routing strategy: "capacity_headroom" or "least_busy". */
+  routing_strategy?: "capacity_headroom" | "least_busy" | string;
   /**
    * Runtime-native reasoning/effort token. Tri-state semantics (MUL-2339):
    *   - field omitted → no change

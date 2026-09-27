@@ -43,6 +43,7 @@ import type {
   WorkspaceWorkingAgentMineRelation,
   WorkspaceWorkingAgentType,
   AgentRuntime,
+  RuntimeCapacitySnapshot,
   RuntimeProfile,
   CreateRuntimeProfileRequest,
   UpdateRuntimeProfileRequest,
@@ -2343,6 +2344,17 @@ export class ApiClient {
     await this.fetch(
       `/api/workspaces/${workspaceId}/runtime-profiles/${profileId}`,
       { method: "DELETE" },
+    );
+  }
+
+  async getRuntimeCapacity(
+    runtimeId: string,
+    params?: { model?: string },
+  ): Promise<RuntimeCapacitySnapshot | null> {
+    const search = new URLSearchParams();
+    if (params?.model) search.set("model", params.model);
+    return this.fetch<RuntimeCapacitySnapshot>(
+      `/api/runtimes/${runtimeId}/capacity?${search}`,
     );
   }
 

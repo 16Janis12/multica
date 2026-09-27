@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
+	"github.com/multica-ai/multica/server/pkg/runtimeusage"
 )
 
 // sessionContinuityNoticeFor picks the notice matching what this surface
@@ -69,7 +71,23 @@ func perTurnContextBlocks(task Task, opts promptOpts) string {
 	}
 	b.WriteString(execenv.BuildOnBehalfOfBlock(task.InitiatorName, task.InitiatorEmail))
 	b.WriteString(execenv.BuildConnectedAppsBlock(task.ConnectedApps))
+	b.WriteString(buildRuntimeQuotaBlock(opts.provider, taskModel(task)))
 	return b.String()
+}
+
+func taskModel(task Task) string {
+	if task.Agent != nil {
+		return task.Agent.Model
+	}
+	return ""
+}
+
+func buildRuntimeQuotaBlock(provider, model string) string {
+	if provider == "" {
+		return ""
+	}
+	snap := runtimeusage.Default.GetSnapshot(context.Background(), provider, model)
+	return runtimeusage.FormatTurnPrompt(snap)
 }
 
 // promptOpts carries per-run facts the claimed Task does not: things only the
@@ -78,6 +96,7 @@ func perTurnContextBlocks(task Task, opts promptOpts) string {
 type promptOpts struct {
 	sharedLocalDirectory    bool
 	worktreeReplayConflicts []string
+	provider                string
 }
 
 // PromptOption tunes per-turn prompt copy with run-scoped context.
@@ -185,6 +204,7 @@ func BuildPrompt(task Task, provider string, options ...PromptOption) string {
 	for _, apply := range options {
 		apply(&opts)
 	}
+	opts.provider = provider
 	body := buildPromptBody(task, provider)
 	// Run-scoped context is appended, never prepended: everything ahead of it
 	// is stable across runs of a resumed session, and appending keeps it after

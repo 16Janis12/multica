@@ -20,6 +20,7 @@ import (
 	"github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
+	"github.com/multica-ai/multica/server/pkg/runtimeusage"
 )
 
 type AgentRuntimeResponse struct {
@@ -103,6 +104,27 @@ type RuntimeUsageResponse struct {
 	UncostedOutputTokens     int64 `json:"uncosted_output_tokens"`
 	UncostedCacheReadTokens  int64 `json:"uncosted_cache_read_tokens"`
 	UncostedCacheWriteTokens int64 `json:"uncosted_cache_write_tokens"`
+}
+
+// GetRuntimeCapacity returns the real-time rate limit and quota capacity snapshot
+// (e.g. 5h session and 7d weekly horizons) for the runtime's underlying provider.
+func (h *Handler) GetRuntimeCapacity(w http.ResponseWriter, r *http.Request) {
+	runtimeID := chi.URLParam(r, "runtimeId")
+	rt, _, ok := h.requireRuntimeReadAccess(w, r, obsmetrics.RuntimeLookupSourceRuntimeAPI, runtimeID)
+	if !ok {
+		return
+	}
+	model := r.URL.Query().Get("model")
+	snap := runtimeusage.Default.GetSnapshot(r.Context(), rt.Provider, model)
+	if snap == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"provider":       rt.Provider,
+			"effective_tier": runtimeusage.CapacityUnknown,
+			"supported":      false,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
 }
 
 // GetRuntimeUsage returns daily token usage for a runtime, aggregated from

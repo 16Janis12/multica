@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/runtimeusage"
 )
 
 // squadOperatingProtocolHeader is the hard-coded system-level briefing
@@ -45,7 +47,10 @@ Your responsibilities, in order:
 1. **Read the issue** (title, description, latest comments, acceptance
    criteria) and decide which squad member is best suited to do the work.
    Match the task to each member's listed **skills** and role in the Squad
-   Roster below — prefer the member whose skills cover the work.
+   Roster below — prefer the member whose skills cover the work. Also check
+   their **capacity** (5h and 7d quotas): if a member is [LOW] or [EXHAUSTED]
+   (<15% remaining), avoid assigning large multi-turn tasks to them and prefer
+   an alternative member with sufficient capacity.
 2. **Delegate by @mention.** Post a single comment on this issue that
    @mentions the chosen member(s) and tells them what to do.
    - **Be terse.** Every Multica agent already has full context of the
@@ -304,9 +309,23 @@ func renderMemberRow(ctx context.Context, q *db.Queries, m db.SquadMember, skill
 		if ag.ArchivedAt.Valid {
 			return ""
 		}
+		var capacityBadge string
+		if ag.RuntimeID.Valid {
+			if rt, err := q.GetAgentRuntime(ctx, ag.RuntimeID); err == nil {
+				var rc struct {
+					Model string `json:"model"`
+				}
+				if ag.RuntimeConfig != nil {
+					_ = json.Unmarshal(ag.RuntimeConfig, &rc)
+				}
+				if snap := runtimeusage.Default.GetSnapshot(ctx, rt.Provider, rc.Model); snap != nil {
+					capacityBadge = runtimeusage.FormatRosterCapacity(snap)
+				}
+			}
+		}
 		// Agents carry skills; surfacing them lets the leader delegate by
 		// capability instead of guessing from the free-text role label.
-		return formatRosterRow(ag.Name, "agent", role, agentSkillsRosterSegment(skillNamesByAgentID, skillsLoaded, id), formatMention(ag.Name, "agent", id))
+		return formatRosterRow(ag.Name, "agent", role, capacityBadge, agentSkillsRosterSegment(skillNamesByAgentID, skillsLoaded, id), formatMention(ag.Name, "agent", id))
 	case "member":
 		user, err := q.GetUser(ctx, m.MemberID)
 		if err != nil {
@@ -316,7 +335,7 @@ func renderMemberRow(ctx context.Context, q *db.Queries, m db.SquadMember, skill
 		// the product — see util.MentionRe and frontend mention payloads).
 		// Humans have no Multica skills, so no skills segment is rendered.
 		userID := util.UUIDToString(m.MemberID)
-		return formatRosterRow(user.Name, "member (human)", role, "", formatMention(user.Name, "member", userID))
+		return formatRosterRow(user.Name, "member (human)", role, "", "", formatMention(user.Name, "member", userID))
 	default:
 		return ""
 	}
@@ -339,7 +358,7 @@ func agentSkillsRosterSegment(skillNamesByAgentID map[string][]string, skillsLoa
 	return "skills: " + strings.Join(names, ", ")
 }
 
-func formatRosterRow(name, kind, role, skills, mention string) string {
+func formatRosterRow(name, kind, role, capacity, skills, mention string) string {
 	var sb strings.Builder
 	sb.WriteString("- ")
 	sb.WriteString(name)
@@ -349,6 +368,10 @@ func formatRosterRow(name, kind, role, skills, mention string) string {
 		sb.WriteString(`, role: "`)
 		sb.WriteString(role)
 		sb.WriteString(`"`)
+	}
+	if capacity != "" {
+		sb.WriteString(", capacity: ")
+		sb.WriteString(capacity)
 	}
 	if skills != "" {
 		sb.WriteString(" — ")

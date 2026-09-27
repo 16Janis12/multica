@@ -5,6 +5,8 @@ export const runtimeKeys = {
   all: (wsId: string) => ["runtimes", wsId] as const,
   list: (wsId: string) => [...runtimeKeys.all(wsId), "list"] as const,
   listMine: (wsId: string) => [...runtimeKeys.all(wsId), "list", "mine"] as const,
+  capacity: (rid: string, model?: string) =>
+    ["runtimes", "capacity", rid, model ?? ""] as const,
   usage: (rid: string, days: number, tz: string) =>
     ["runtimes", "usage", rid, days, tz] as const,
   usageByAgent: (rid: string, days: number, tz: string) =>
@@ -15,6 +17,18 @@ export const runtimeKeys = {
 };
 
 // `tz` is the viewer's IANA name — all reports follow the viewer's tz.
+export function runtimeCapacityOptions(
+  runtimeId: string,
+  model?: string,
+) {
+  return queryOptions({
+    queryKey: runtimeKeys.capacity(runtimeId, model),
+    queryFn: () => api.getRuntimeCapacity(runtimeId, { model }),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+}
+
 export function runtimeUsageOptions(
   runtimeId: string,
   days: number,
