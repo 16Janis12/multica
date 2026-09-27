@@ -523,6 +523,29 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.5.5",
+        date: "2026-09-27",
+        title: "Dynamic runtime routing, live capacity metrics, and multi-agent usage tracking",
+        changes: [],
+        features: [
+          "Route tasks dynamically across candidate runtime pools based on headroom and active load.",
+          "Keep sessions sticky to active runtimes with automatic failover when throttled or disconnected.",
+          "Track real-time capacity and quota horizons (5-hour and 7-day) for AntiGravity, Claude, and Codex.",
+          "Inspect live capacity metrics in the new RuntimeCapacityCard and compact runtime status pills.",
+          "Pass candidate runtimes and routing strategies directly to agent CLI commands.",
+          "Inject live quota context dynamically into agent turns and squad leader briefings.",
+        ],
+        improvements: [
+          "Auto-refresh OAuth tokens transparently during AntiGravity quota retrieval.",
+          "Cache runtime capacity responses with a 15-second TTL to prevent upstream rate limiting.",
+          "Display capacity tier indicators (Ample, Low, Critical, Exhausted) in squad member rosters.",
+        ],
+        fixes: [
+          "Gracefully fall back when prober APIs are unreachable or lack credentials.",
+          "Preserve issue affinity across agent re-assignments within the candidate pool.",
+        ],
+      },
+      {
         version: "0.5.4",
         date: "2026-09-27",
         title: "Dynamic blocks & deliverables, full attachment viewer, steer from composer, and Claude Opus 5.5",
