@@ -20,11 +20,12 @@ type cacheEntry struct {
 
 // Manager coordinates quota probers, caching, and singleflight deduplication.
 type Manager struct {
-	mu      sync.RWMutex
-	probers map[string]Prober
-	cache   map[string]cacheEntry
-	ttl     time.Duration
-	group   singleflight.Group
+	mu           sync.RWMutex
+	probers      map[string]Prober
+	cache        map[string]cacheEntry
+	runtimeCache map[string]cacheEntry
+	ttl          time.Duration
+	group        singleflight.Group
 }
 
 // NewManager creates a new quota Manager.
@@ -33,10 +34,38 @@ func NewManager(ttl time.Duration) *Manager {
 		ttl = DefaultTTL
 	}
 	return &Manager{
-		probers: make(map[string]Prober),
-		cache:   make(map[string]cacheEntry),
-		ttl:     ttl,
+		probers:      make(map[string]Prober),
+		cache:        make(map[string]cacheEntry),
+		runtimeCache: make(map[string]cacheEntry),
+		ttl:          ttl,
 	}
+}
+
+// SetRuntimeSnapshot caches a capacity snapshot reported directly by a runtime daemon.
+func (m *Manager) SetRuntimeSnapshot(runtimeID string, snap *RuntimeUsageSnapshot) {
+	if runtimeID == "" || snap == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimeCache[runtimeID] = cacheEntry{
+		snapshot:  snap,
+		expiresAt: time.Now().Add(10 * time.Minute),
+	}
+}
+
+// GetRuntimeSnapshot returns the latest daemon-reported capacity snapshot for a runtime.
+func (m *Manager) GetRuntimeSnapshot(runtimeID string) *RuntimeUsageSnapshot {
+	if runtimeID == "" {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	entry, ok := m.runtimeCache[runtimeID]
+	if ok && time.Now().Before(entry.expiresAt) {
+		return entry.snapshot
+	}
+	return nil
 }
 
 // Register registers a prober for a specific provider.
