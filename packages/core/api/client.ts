@@ -2353,9 +2353,19 @@ export class ApiClient {
   ): Promise<RuntimeCapacitySnapshot | null> {
     const search = new URLSearchParams();
     if (params?.model) search.set("model", params.model);
-    return this.fetch<RuntimeCapacitySnapshot>(
-      `/api/runtimes/${runtimeId}/capacity?${search}`,
-    );
+    try {
+      return await this.fetch<RuntimeCapacitySnapshot>(
+        `/api/runtimes/${runtimeId}/capacity?${search}`,
+      );
+    } catch (err: any) {
+      return {
+        provider: "unknown",
+        effective_tier: "UNKNOWN",
+        supported: false,
+        error: err?.message || "Failed to fetch capacity",
+        checked_at: new Date().toISOString(),
+      };
+    }
   }
 
   async getRuntimeUsage(

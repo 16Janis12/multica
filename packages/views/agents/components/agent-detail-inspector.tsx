@@ -35,6 +35,14 @@ import {
   type ModelCatalog,
 } from "./inspector/model-change-cleanup";
 import { RuntimePicker } from "./inspector/runtime-picker";
+import { RuntimeCandidatePoolPicker } from "./inspector/runtime-candidate-pool-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@multica/ui/components/ui/select";
 import { ThinkingSettingField } from "./inspector/thinking-prop-row";
 import { ServiceTierSettingField } from "./inspector/service-tier-setting-field";
 
@@ -264,6 +272,50 @@ export function AgentDetailInspector({
               }
             />
           </SettingsRow>
+          <SettingsRow
+            label="Candidate Pool"
+            size="select-wide"
+          >
+            <RuntimeCandidatePoolPicker
+              candidateIds={agent.runtime_candidate_ids ?? []}
+              defaultRuntimeId={agent.runtime_id}
+              runtimes={runtimes}
+              members={members}
+              currentUserId={currentUserId}
+              canEdit={canEdit}
+              onChange={(ids) => update({ runtime_candidate_ids: ids })}
+            />
+          </SettingsRow>
+          {(agent.runtime_candidate_ids && agent.runtime_candidate_ids.length > 0) && (
+            <SettingsRow
+              label="Routing Strategy"
+              size="select-wide"
+            >
+              <Select
+                value={agent.routing_strategy || "capacity_headroom"}
+                onValueChange={(val) => {
+                  if (val) update({ routing_strategy: val });
+                }}
+                disabled={!canEdit}
+                items={[
+                  { value: "capacity_headroom", label: "Capacity Headroom (Balances Quota & Headroom)" },
+                  { value: "least_busy", label: "Least Busy (Balances Active Task Count)" },
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="capacity_headroom">
+                    Capacity Headroom (Balances Quota & Headroom)
+                  </SelectItem>
+                  <SelectItem value="least_busy">
+                    Least Busy (Balances Active Task Count)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+          )}
           <SettingsRow
             label={t(($) => $.inspector.prop_model)}
             size="select-wide"

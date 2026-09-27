@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import {
   AlertTriangle,
   Calendar,
@@ -19,7 +18,6 @@ import type {
 } from "@multica/core/types";
 import { runtimeCapacityOptions } from "@multica/core/runtimes/queries";
 import { Badge } from "@multica/ui/components/ui/badge";
-import { Button } from "@multica/ui/components/ui/button";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import {
   Tooltip,
@@ -126,7 +124,8 @@ export function RuntimeCapacityCard({ runtime }: { runtime: AgentRuntime }) {
   const tierConfig = TIER_CONFIG[tier] ?? TIER_CONFIG.UNKNOWN;
   const TierIcon = tierConfig.icon;
 
-  const isSupported = data?.supported !== false && !data?.error;
+  const hasWindows = Boolean(data?.session_5h || data?.weekly_7d || (data?.model_buckets && Object.keys(data.model_buckets).length > 0));
+  const isSupported = data?.supported !== false && (!data?.error || hasWindows);
   const checkedAgo = data?.checked_at ? timeAgo(data.checked_at) : null;
 
   return (
