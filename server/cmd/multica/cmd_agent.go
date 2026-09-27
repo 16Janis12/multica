@@ -162,6 +162,8 @@ func init() {
 	agentCreateCmd.Flags().String("instructions", "", "Agent instructions")
 	agentCreateCmd.Flags().String("conversation-starters", "", "Conversation starters as a JSON array of {\"label\",\"prompt\"} objects (at most 3; label ≤80, prompt ≤4000). Shown above the Chat composer; selecting one fills the composer and does not start a run. Omit to default to none.")
 	agentCreateCmd.Flags().String("runtime-id", "", "Runtime ID (required)")
+	agentCreateCmd.Flags().StringSlice("candidate-runtimes", nil, "Candidate runtime IDs for dynamic quota/capacity pooling (repeatable or comma-separated)")
+	agentCreateCmd.Flags().String("routing-strategy", "capacity_headroom", "Dynamic routing strategy: capacity_headroom (default) or least_busy")
 	agentCreateCmd.Flags().String("runtime-config", "", "Runtime config as JSON string")
 	agentCreateCmd.Flags().String("model", "", "Model identifier (e.g. claude-sonnet-4-6, openai/gpt-4o). Prefer this over passing --model in --custom-args.")
 	agentCreateCmd.Flags().String("thinking-level", "", "Reasoning/effort level for the agent's runtime (e.g. Claude: low|medium|high|xhigh|max; Codex values come from the runtime model catalog). The set is runtime/model-specific; malformed values are rejected server-side and the daemon validates the exact model/level pair. Some runtimes (e.g. hermes) expose no reasoning control and reject every value. Empty = runtime default.")
@@ -186,6 +188,8 @@ func init() {
 	agentUpdateCmd.Flags().String("instructions", "", "New instructions")
 	agentUpdateCmd.Flags().String("conversation-starters", "", "New conversation starters as a JSON array of {\"label\",\"prompt\"} objects (at most 3; label ≤80, prompt ≤4000). Pass '[]' to clear. Omit to leave the stored value unchanged.")
 	agentUpdateCmd.Flags().String("runtime-id", "", "New runtime ID")
+	agentUpdateCmd.Flags().StringSlice("candidate-runtimes", nil, "Candidate runtime IDs for dynamic quota/capacity pooling (repeatable or comma-separated; pass empty or null to clear)")
+	agentUpdateCmd.Flags().String("routing-strategy", "", "Dynamic routing strategy: capacity_headroom or least_busy")
 	agentUpdateCmd.Flags().String("runtime-config", "", "New runtime config as JSON string")
 	agentUpdateCmd.Flags().String("model", "", "New model identifier. Pass an empty string to clear and fall back to the runtime default.")
 	agentUpdateCmd.Flags().String("thinking-level", "", "New reasoning/effort level for the agent's runtime (e.g. Claude: low|medium|high|xhigh|max; Codex values come from the runtime model catalog). The set is runtime/model-specific; malformed values are rejected server-side and the daemon validates the exact model/level pair. Some runtimes (e.g. hermes) expose no reasoning control and reject every value. Pass an empty string to clear and fall back to the runtime default.")
@@ -706,6 +710,14 @@ func runAgentCreate(cmd *cobra.Command, _ []string) error {
 		v, _ := cmd.Flags().GetString("visibility")
 		body["visibility"] = v
 	}
+	if cmd.Flags().Changed("candidate-runtimes") {
+		v, _ := cmd.Flags().GetStringSlice("candidate-runtimes")
+		body["runtime_candidate_ids"] = v
+	}
+	if cmd.Flags().Changed("routing-strategy") {
+		v, _ := cmd.Flags().GetString("routing-strategy")
+		body["routing_strategy"] = v
+	}
 	applyAgentPermissionFlags(cmd, body)
 	if cmd.Flags().Changed("max-concurrent-tasks") {
 		v, _ := cmd.Flags().GetInt32("max-concurrent-tasks")
@@ -792,6 +804,26 @@ func runAgentUpdate(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("visibility") {
 		v, _ := cmd.Flags().GetString("visibility")
 		body["visibility"] = v
+	}
+	if cmd.Flags().Changed("candidate-runtimes") {
+		v, _ := cmd.Flags().GetStringSlice("candidate-runtimes")
+		if len(v) == 1 && (v[0] == "" || v[0] == "null") {
+			body["runtime_candidate_ids"] = nil
+		} else {
+			body["runtime_candidate_ids"] = v
+		}
+	}
+	if cmd.Flags().Changed("routing-strategy") {
+		v, _ := cmd.Flags().GetString("routing-strategy")
+		body["routing_strategy"] = v
+	}
+	if cmd.Flags().Changed("candidate-runtimes") {
+		v, _ := cmd.Flags().GetStringSlice("candidate-runtimes")
+		body["runtime_candidate_ids"] = v
+	}
+	if cmd.Flags().Changed("routing-strategy") {
+		v, _ := cmd.Flags().GetString("routing-strategy")
+		body["routing_strategy"] = v
 	}
 	applyAgentPermissionFlags(cmd, body)
 	if cmd.Flags().Changed("status") {

@@ -58,14 +58,17 @@ INSERT INTO agent (
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
     instructions, custom_env, custom_args, mcp_config, model, thinking_level,
     service_tier, conversation_starters,
-    composio_toolkit_allowlist, permission_mode
+    composio_toolkit_allowlist, permission_mode,
+    runtime_candidate_ids, routing_strategy
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14, $15, $16,
     $17, COALESCE(sqlc.narg('conversation_starters')::jsonb, '[]'::jsonb),
     sqlc.narg('composio_toolkit_allowlist')::text[],
-    COALESCE(sqlc.narg('permission_mode'), 'private')
+    COALESCE(sqlc.narg('permission_mode'), 'private'),
+    sqlc.narg('runtime_candidate_ids')::uuid[],
+    COALESCE(sqlc.narg('routing_strategy'), 'capacity_headroom')
 )
 RETURNING *;
 
@@ -144,6 +147,8 @@ UPDATE agent SET
     service_tier = COALESCE(sqlc.narg('service_tier'), service_tier),
     conversation_starters = COALESCE(sqlc.narg('conversation_starters'), conversation_starters),
     composio_toolkit_allowlist = COALESCE(sqlc.narg('composio_toolkit_allowlist')::text[], composio_toolkit_allowlist),
+    runtime_candidate_ids = COALESCE(sqlc.narg('runtime_candidate_ids')::uuid[], runtime_candidate_ids),
+    routing_strategy = COALESCE(sqlc.narg('routing_strategy'), routing_strategy),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -176,6 +181,11 @@ RETURNING *;
 
 -- name: ClearAgentMcpConfig :one
 UPDATE agent SET mcp_config = NULL, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ClearAgentRuntimeCandidateIDs :one
+UPDATE agent SET runtime_candidate_ids = NULL, updated_at = now()
 WHERE id = $1
 RETURNING *;
 
@@ -2857,3 +2867,20 @@ RETURNING *;
 
 -- name: GetCommentThreadRootID :one
 SELECT comment_thread_root_id(@comment_id::uuid)::uuid AS id;
+
+-- name: CountActiveTasksByRuntimes :many
+SELECT runtime_id, count(*)::bigint AS active_count
+FROM agent_task_queue
+WHERE runtime_id = ANY(@runtime_ids::uuid[])
+  AND status IN ('queued', 'dispatched', 'running', 'waiting_local_directory')
+GROUP BY runtime_id;
+
+-- name: GetLatestTaskRuntimeForIssueAndAgent :one
+SELECT runtime_id
+FROM agent_task_queue
+WHERE issue_id = @issue_id
+  AND agent_id = @agent_id
+  AND runtime_id IS NOT NULL
+  AND status = 'completed'
+ORDER BY created_at DESC
+LIMIT 1;

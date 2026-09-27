@@ -138,11 +138,33 @@ func AgentReadiness(ctx context.Context, lookup RuntimeLookup, agent db.Agent) (
 		}, nil
 	}
 	if !agent.RuntimeID.Valid {
-		return AgentVerdict{
-			Availability: AgentBlocked,
-			Reason:       dispatch.ReasonAgentRuntimeRequired,
-			Detail:       "agent has no runtime bound",
-		}, nil
+		if len(agent.RuntimeCandidateIds) == 0 {
+			return AgentVerdict{
+				Availability: AgentBlocked,
+				Reason:       dispatch.ReasonAgentRuntimeRequired,
+				Detail:       "agent has no runtime bound",
+			}, nil
+		}
+		byID, err := lookup.GetMany(ctx, agent.RuntimeCandidateIds)
+		if err != nil {
+			return AgentVerdict{}, err
+		}
+		if len(byID) == 0 {
+			return AgentVerdict{
+				Availability: AgentBlocked,
+				Reason:       dispatch.ReasonAgentRuntimeRequired,
+				Detail:       "no candidate runtimes found",
+			}, nil
+		}
+		var fallbackVerdict AgentVerdict
+		for _, rt := range byID {
+			v := runtimeVerdict(rt, agent)
+			if v.Availability == AgentAvailable {
+				return v, nil
+			}
+			fallbackVerdict = v
+		}
+		return fallbackVerdict, nil
 	}
 	rt, err := lookup.Get(ctx, agent.RuntimeID)
 	if err != nil {

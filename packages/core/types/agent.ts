@@ -654,6 +654,10 @@ export interface Agent {
   updated_at: string;
   archived_at: string | null;
   archived_by: string | null;
+  /** Candidate runtime IDs for dynamic quota/capacity pooling (routing pool). */
+  runtime_candidate_ids?: string[];
+  /** Dynamic routing strategy: "capacity_headroom" (default) or "least_busy". */
+  routing_strategy?: "capacity_headroom" | "least_busy" | string;
 }
 
 export interface AgentConversationStarter {
@@ -728,6 +732,10 @@ export interface CreateAgentRequest {
   template?: string;
   /** Workspace skill IDs attached atomically with the agent row. */
   skill_ids?: string[];
+  /** Candidate runtime IDs for dynamic quota/capacity pooling. */
+  runtime_candidate_ids?: string[];
+  /** Dynamic routing strategy: "capacity_headroom" or "least_busy". */
+  routing_strategy?: "capacity_headroom" | "least_busy" | string;
 }
 
 export interface AgentBuilderSession {
@@ -846,6 +854,10 @@ export interface UpdateAgentRequest {
   status?: AgentStatus;
   max_concurrent_tasks?: number;
   model?: string;
+  /** Candidate runtime IDs for dynamic quota/capacity pooling (pass null or [] to clear). */
+  runtime_candidate_ids?: string[] | null;
+  /** Dynamic routing strategy: "capacity_headroom" or "least_busy". */
+  routing_strategy?: "capacity_headroom" | "least_busy" | string;
   /**
    * Runtime-native reasoning/effort token. Tri-state semantics (MUL-2339):
    *   - field omitted → no change

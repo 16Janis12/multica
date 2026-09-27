@@ -18,6 +18,11 @@ const (
 	CapacityUnknown   CapacityTier = "UNKNOWN"
 )
 
+// Rank orders tiers from most restricted (0) to most available (3).
+func (t CapacityTier) Rank() int {
+	return t.rank()
+}
+
 // TierRank orders tiers from most restricted (0) to most available (3).
 func (t CapacityTier) rank() int {
 	switch t {
