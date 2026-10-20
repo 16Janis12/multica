@@ -657,6 +657,7 @@ export interface Agent {
   runtime_candidate_ids?: string[];
   /** Dynamic routing strategy: "capacity_headroom" (default) or "least_busy". */
   routing_strategy?: "capacity_headroom" | "least_busy" | string;
+  read_only?: boolean;
 }
 
 export interface AgentConversationStarter {
@@ -735,6 +736,7 @@ export interface CreateAgentRequest {
   runtime_candidate_ids?: string[];
   /** Dynamic routing strategy: "capacity_headroom" or "least_busy". */
   routing_strategy?: "capacity_headroom" | "least_busy" | string;
+  read_only?: boolean;
 }
 
 export interface AgentBuilderSession {
@@ -873,6 +875,7 @@ export interface UpdateAgentRequest {
    * clears it, and a non-empty value stores a runtime-catalog ID.
    */
   service_tier?: string;
+  read_only?: boolean;
 }
 
 /**

@@ -142,6 +142,7 @@ type AgentResponse struct {
 	UpdatedAt                        string                 `json:"updated_at"`
 	ArchivedAt                       *string                `json:"archived_at"`
 	ArchivedBy                       *string                `json:"archived_by"`
+	ReadOnly                         bool                   `json:"read_only"`
 }
 
 // runtimeConfigGatewayTokenMask is the placeholder the API substitutes for
@@ -256,6 +257,7 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 		UpdatedAt:                timestampToString(a.UpdatedAt),
 		ArchivedAt:               timestampToPtr(a.ArchivedAt),
 		ArchivedBy:               uuidToPtr(a.ArchivedBy),
+		ReadOnly:                 a.ReadOnly,
 	}
 }
 
@@ -802,6 +804,7 @@ type TaskAgentData struct {
 	// (issue #3260). Other providers ignore the payload entirely. Sent
 	// raw so the daemon can evolve its schema without a server roundtrip.
 	RuntimeConfig json.RawMessage `json:"runtime_config,omitempty"`
+	ReadOnly      bool            `json:"read_only,omitempty"`
 }
 
 // visibleTaskHistory omits unused assignee fallbacks created by older versions.
@@ -1361,6 +1364,7 @@ type CreateAgentRequest struct {
 	SkillIDs            []string  `json:"skill_ids"`
 	RuntimeCandidateIDs *[]string `json:"runtime_candidate_ids"`
 	RoutingStrategy     *string   `json:"routing_strategy"`
+	ReadOnly            *bool     `json:"read_only"`
 }
 
 func decodeJSONBodyWithRawFields(body io.Reader, dst any) (map[string]json.RawMessage, error) {
@@ -1657,6 +1661,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		ComposioToolkitAllowlist: allowlist,
 		RuntimeCandidateIds:      candidateUUIDs,
 		RoutingStrategy:          routingStrategy,
+		ReadOnly:                 pgtype.Bool{Bool: req.ReadOnly != nil && *req.ReadOnly, Valid: req.ReadOnly != nil},
 	})
 	if err != nil {
 		// Unique constraint on (workspace_id, name) — return a clear conflict error
@@ -1775,6 +1780,7 @@ type UpdateAgentRequest struct {
 	ComposioToolkitAllowlist *[]string `json:"composio_toolkit_allowlist"`
 	RuntimeCandidateIDs      *[]string `json:"runtime_candidate_ids"`
 	RoutingStrategy          *string   `json:"routing_strategy"`
+	ReadOnly                 *bool     `json:"read_only"`
 }
 
 // workspaceAlwaysRedactSecrets reports whether the workspace has opted
@@ -2000,6 +2006,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.RoutingStrategy != nil && *req.RoutingStrategy != "" {
 		params.RoutingStrategy = pgtype.Text{String: *req.RoutingStrategy, Valid: true}
+	}
+	if req.ReadOnly != nil {
+		params.ReadOnly = pgtype.Bool{Bool: *req.ReadOnly, Valid: true}
 	}
 	if req.Name != nil {
 		params.Name = pgtype.Text{String: *req.Name, Valid: true}

@@ -59,6 +59,14 @@ func buildCodebuddyArgs(opts ExecOptions, logger *slog.Logger) []string {
 		// would match nothing despite what the CLI's own help text claims.
 		"--disallowedTools", "AskUserQuestion", "EnterPlanMode", "ExitPlanMode",
 	}
+	if opts.ReadOnly {
+		args = append(args,
+			"--disallowedTools", "Bash",
+			"--disallowedTools", "Edit",
+			"--disallowedTools", "Write",
+			"--disallowedTools", "NotebookEdit",
+		)
+	}
 	// NOTE: --strict-mcp-config is deliberately never passed. It means "only
 	// use servers from --mcp-config", which drops CodeBuddy's user, project
 	// AND local scopes. Measured against CodeBuddy 2.x with one real MCP

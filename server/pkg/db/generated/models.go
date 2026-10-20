@@ -56,6 +56,7 @@ type Agent struct {
 	ConversationStarters  []byte        `json:"conversation_starters"`
 	RuntimeCandidateIds   []pgtype.UUID `json:"runtime_candidate_ids"`
 	RoutingStrategy       string        `json:"routing_strategy"`
+	ReadOnly              bool          `json:"read_only"`
 }
 
 type AgentBuilderDraft struct {

@@ -45,6 +45,7 @@ import {
 } from "@multica/ui/components/ui/select";
 import { ThinkingSettingField } from "./inspector/thinking-prop-row";
 import { ServiceTierSettingField } from "./inspector/service-tier-setting-field";
+import { Switch } from "@multica/ui/components/ui/switch";
 
 interface InspectorProps {
   agent: Agent;
@@ -377,6 +378,20 @@ export function AgentDetailInspector({
               canEdit={canEdit}
               onSave={(next) => update({ max_concurrent_tasks: next })}
             />
+          </SettingsRow>
+          <SettingsRow
+            label="Read-Only Mode"
+            description="Restricts this agent to read-only usage. File writes and shell executions are blocked."
+            size="select-wide"
+          >
+            <div className="flex items-center justify-end py-1">
+              <Switch
+                checked={Boolean(agent.read_only)}
+                disabled={!canEdit}
+                onCheckedChange={(checked) => update({ read_only: checked })}
+                aria-label="Read-Only Mode"
+              />
+            </div>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

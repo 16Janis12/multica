@@ -567,6 +567,7 @@ func (b *hermesBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 
 	c := &hermesClient{
 		cfg:                        b.cfg,
+		readOnly:                   opts.ReadOnly,
 		stdin:                      stdin,
 		pending:                    make(map[int]*pendingRPC),
 		pendingTools:               make(map[string]*pendingToolCall),
@@ -1136,6 +1137,7 @@ type hermesPromptResult struct {
 }
 
 type hermesClient struct {
+	readOnly     bool
 	cfg          Config
 	stdin        interface{ Write([]byte) (int, error) }
 	writeMu      sync.Mutex // serialises stdin.Write calls across goroutines
@@ -1431,6 +1433,9 @@ func (c *hermesClient) handleAgentRequest(raw map[string]json.RawMessage) {
 		selector := c.selectPermission
 		if selector == nil {
 			selector = selectACPPermissionOption
+		}
+		if c.readOnly {
+			selector = selectACPReadOnlyPermissionOption
 		}
 		optionID, grant, ok := selector(raw["params"])
 		if ok {
@@ -3509,4 +3514,44 @@ func promoteACPResultOnProviderError(finalStatus, finalError, finalOutput string
 		}
 	}
 	return finalStatus, finalError
+}
+
+// isACPWriteOrExecTool reports whether the requested tool name or title represents
+// a state-modifying action (file edit/write, command/shell execution) that must be blocked in read-only mode.
+func isACPWriteOrExecTool(title, name string) bool {
+	combined := strings.ToLower(title + " " + name)
+	keywords := []string{
+		"write", "edit", "create", "delete", "remove", "patch",
+		"bash", "exec", "terminal", "shell", "run_command", "run",
+	}
+	for _, kw := range keywords {
+		if strings.Contains(combined, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// selectACPReadOnlyPermissionOption enforces read-only mode by rejecting any write or exec tools
+// while allowing read-only inspections.
+func selectACPReadOnlyPermissionOption(params json.RawMessage) (optionID string, grant bool, ok bool) {
+	var p struct {
+		ToolCall struct {
+			Title string `json:"title"`
+			Name  string `json:"name"`
+		} `json:"toolCall"`
+		Options []acpPermissionOption `json:"options"`
+	}
+	if len(params) > 0 {
+		_ = json.Unmarshal(params, &p)
+	}
+	if isACPWriteOrExecTool(p.ToolCall.Title, p.ToolCall.Name) {
+		for _, opt := range p.Options {
+			if opt.OptionID != "" && strings.EqualFold(strings.TrimSpace(opt.Kind), acpKindRejectOnce) {
+				return opt.OptionID, false, true
+			}
+		}
+		return "", false, false
+	}
+	return selectACPPermissionOption(params)
 }

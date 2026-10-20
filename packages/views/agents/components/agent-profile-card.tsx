@@ -89,6 +89,11 @@ export function AgentProfileCard({ agentId }: AgentProfileCardProps) {
           <div className="flex items-center gap-1.5">
             <p className="truncate text-body font-semibold">{agent.name}</p>
             {!isArchived && <VisibilityBadge value={agent.visibility} compact />}
+            {agent.read_only && (
+              <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-micro font-medium text-amber-600 dark:text-amber-400">
+                Read-only
+              </span>
+            )}
             {isArchived && (
               <span className="rounded-md bg-muted px-1.5 py-0.5 text-micro font-medium text-muted-foreground">
                 {t(($) => $.row.archived)}

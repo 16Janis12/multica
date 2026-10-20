@@ -4858,3 +4858,44 @@ func TestHermesClientOtherDialectsStillDefer(t *testing.T) {
 		t.Fatalf("dialects without toolStartCarriesFinalInput must still defer, got %+v", got)
 	}
 }
+
+func TestSelectACPReadOnlyPermissionOption(t *testing.T) {
+	// Write tool should select reject_once
+	writeParams := json.RawMessage(`{
+		"toolCall": {"toolCallId": "tc-1", "title": "write: output.txt"},
+		"options": [
+			{"optionId": "opt-allow", "kind": "allow_once"},
+			{"optionId": "opt-reject", "kind": "reject_once"}
+		]
+	}`)
+	optID, grant, ok := selectACPReadOnlyPermissionOption(writeParams)
+	if !ok || grant || optID != "opt-reject" {
+		t.Fatalf("expected reject_once for write tool, got optID=%q grant=%v ok=%v", optID, grant, ok)
+	}
+
+	// Exec / bash tool should select reject_once
+	execParams := json.RawMessage(`{
+		"toolCall": {"toolCallId": "tc-2", "title": "Running bash command: rm -rf foo"},
+		"options": [
+			{"optionId": "opt-allow", "kind": "allow_once"},
+			{"optionId": "opt-reject", "kind": "reject_once"}
+		]
+	}`)
+	optID, grant, ok = selectACPReadOnlyPermissionOption(execParams)
+	if !ok || grant || optID != "opt-reject" {
+		t.Fatalf("expected reject_once for exec tool, got optID=%q grant=%v ok=%v", optID, grant, ok)
+	}
+
+	// Read tool should select allow_once
+	readParams := json.RawMessage(`{
+		"toolCall": {"toolCallId": "tc-3", "title": "read_file: main.go"},
+		"options": [
+			{"optionId": "opt-allow", "kind": "allow_once"},
+			{"optionId": "opt-reject", "kind": "reject_once"}
+		]
+	}`)
+	optID, grant, ok = selectACPReadOnlyPermissionOption(readParams)
+	if !ok || !grant || optID != "opt-allow" {
+		t.Fatalf("expected allow_once for read tool, got optID=%q grant=%v ok=%v", optID, grant, ok)
+	}
+}

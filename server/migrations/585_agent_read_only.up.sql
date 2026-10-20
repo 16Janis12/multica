@@ -1,0 +1,1 @@
+ALTER TABLE agent ADD COLUMN read_only BOOLEAN NOT NULL DEFAULT false;

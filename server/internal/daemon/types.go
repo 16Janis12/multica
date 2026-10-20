@@ -231,6 +231,7 @@ type AgentData struct {
 	// daemon decodes provider-specific fields (e.g. openclaw mode +
 	// gateway endpoint, see issue #3260); other backends ignore it.
 	RuntimeConfig json.RawMessage `json:"runtime_config,omitempty"`
+	ReadOnly      bool            `json:"read_only,omitempty"`
 }
 
 // DisabledRuntimeSkillData is the task-wire identity of one runtime-local

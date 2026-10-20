@@ -2394,3 +2394,24 @@ func TestEveryBriefThatTeachesJSONOutputAlsoWarnsAgainstMergingStderr(t *testing
 		}
 	}
 }
+
+func TestBuildMetaSkillContent_ReadOnly(t *testing.T) {
+	briefReadOnly := buildMetaSkillContent("claude", TaskContextForEnv{
+		IssueID:  "issue-ro-1",
+		ReadOnly: true,
+	})
+	if !strings.Contains(briefReadOnly, "## Read-Only Mode") {
+		t.Fatalf("expected Read-Only Mode section in brief, got:\n%s", briefReadOnly)
+	}
+	if !strings.Contains(briefReadOnly, "strict READ-ONLY mode") {
+		t.Fatalf("expected strict read-only mention, got:\n%s", briefReadOnly)
+	}
+
+	briefWritable := buildMetaSkillContent("claude", TaskContextForEnv{
+		IssueID:  "issue-wr-1",
+		ReadOnly: false,
+	})
+	if strings.Contains(briefWritable, "## Read-Only Mode") {
+		t.Fatalf("expected no Read-Only Mode section for writable agent, got:\n%s", briefWritable)
+	}
+}

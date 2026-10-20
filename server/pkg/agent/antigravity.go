@@ -197,6 +197,7 @@ func (b *antigravityBackend) executeACP(ctx context.Context, prompt string, opts
 
 	c := &hermesClient{
 		cfg:                        b.cfg,
+		readOnly:                   opts.ReadOnly,
 		stdin:                      stdin,
 		pending:                    make(map[int]*pendingRPC),
 		pendingTools:               make(map[string]*pendingToolCall),
@@ -341,12 +342,14 @@ func (b *antigravityBackend) executeACP(ctx context.Context, prompt string, opts
 		c.sessionID = sessionID
 		b.cfg.Logger.Info("antigravity session created", "session_id", sessionID)
 
-		// 3. Set mode to "yolo" to auto-approve tool permission requests
-		if _, err := c.request(runCtx, "session/set_mode", map[string]any{
-			"sessionId": sessionID,
-			"modeId":    "yolo",
-		}); err != nil {
-			b.cfg.Logger.Debug("antigravity set_mode yolo failed or not supported", "error", err)
+		// 3. Set mode to "yolo" to auto-approve tool permission requests (unless read-only)
+		if !opts.ReadOnly {
+			if _, err := c.request(runCtx, "session/set_mode", map[string]any{
+				"sessionId": sessionID,
+				"modeId":    "yolo",
+			}); err != nil {
+				b.cfg.Logger.Debug("antigravity set_mode yolo failed or not supported", "error", err)
+			}
 		}
 
 		// 4. Set model if specified

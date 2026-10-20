@@ -6286,3 +6286,20 @@ func TestCodexResumeOverflowError(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildCodexArgs_ReadOnly(t *testing.T) {
+	args := buildCodexArgs(ExecOptions{
+		ReadOnly: true,
+	}, slog.Default())
+
+	foundSandbox := false
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--sandbox" && args[i+1] == "read-only" {
+			foundSandbox = true
+			break
+		}
+	}
+	if !foundSandbox {
+		t.Fatalf("expected --sandbox read-only in args, got %v", args)
+	}
+}

@@ -8,6 +8,19 @@ import (
 	"github.com/multica-ai/multica/server/internal/runtimeapps"
 )
 
+func writeReadOnlyMode(b *strings.Builder) {
+	b.WriteString(`
+## Read-Only Mode
+
+This agent is running in strict READ-ONLY mode:
+- Do NOT edit, create, or delete any files or directories.
+- Do NOT execute commands or shell scripts that make modifications or install packages (no writes, no execs).
+- Focus exclusively on inspecting, reading, and analyzing code to answer questions or provide review feedback.
+
+`)
+}
+
+
 // This file holds the runtime brief assembler — the post-MUL-3560 path
 // that `buildMetaSkillContent` delegates to. It used to be one of two
 // paths gated by the `runtime_brief_slim` feature flag against a legacy
@@ -877,6 +890,9 @@ func buildMetaSkillContentSlim(provider string, ctx TaskContextForEnv) string {
 	// (daemon.BuildPrompt) instead. See MUL-5377.
 	writeHeader(&b)
 	writeBackgroundTaskSafetySlim(&b)
+	if ctx.ReadOnly {
+		writeReadOnlyMode(&b)
+	}
 	writeAgentIdentity(&b, ctx)
 	writeRequestingUser(&b, ctx)
 	writeWorkspaceContext(&b, ctx)

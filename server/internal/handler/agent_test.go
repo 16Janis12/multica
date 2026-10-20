@@ -1596,3 +1596,71 @@ func insertHandlerTestTask(t *testing.T, agentID string) string {
 // Defence-in-depth: spot-check that the package compiles a small
 // fmt.Sprintf so accidental imports stay tidy.
 var _ = fmt.Sprintf
+
+func TestCreateAndUpdateAgent_ReadOnly(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	agentName := "readonly-test-agent"
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(),
+			`DELETE FROM agent WHERE workspace_id = $1 AND name = $2`,
+			testWorkspaceID, agentName,
+		)
+	})
+
+	// 1. Create with read_only: true
+	body := map[string]any{
+		"name":       agentName,
+		"runtime_id": testRuntimeID,
+		"read_only":  true,
+	}
+
+	w1 := httptest.NewRecorder()
+	testHandler.CreateAgent(w1, newRequest(http.MethodPost, "/api/agents", body))
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("CreateAgent: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+
+	var resp1 AgentResponse
+	if err := json.NewDecoder(w1.Body).Decode(&resp1); err != nil {
+		t.Fatalf("decode CreateAgent response: %v", err)
+	}
+	if !resp1.ReadOnly {
+		t.Fatalf("expected ReadOnly=true on create, got false")
+	}
+
+	// 2. Read back via GetAgent
+	getReq := withURLParam(newRequest(http.MethodGet, "/api/agents/"+resp1.ID, nil), "id", resp1.ID)
+	getW := httptest.NewRecorder()
+	testHandler.GetAgent(getW, getReq)
+	if getW.Code != http.StatusOK {
+		t.Fatalf("GetAgent: expected 200, got %d: %s", getW.Code, getW.Body.String())
+	}
+	var getResp AgentResponse
+	if err := json.NewDecoder(getW.Body).Decode(&getResp); err != nil {
+		t.Fatalf("decode GetAgent response: %v", err)
+	}
+	if !getResp.ReadOnly {
+		t.Fatalf("expected ReadOnly=true on GetAgent, got false")
+	}
+
+	// 3. Update to read_only: false
+	updateBody := map[string]any{
+		"read_only": false,
+	}
+	updateReq := withURLParam(newRequest(http.MethodPatch, "/api/agents/"+resp1.ID, updateBody), "id", resp1.ID)
+	updateW := httptest.NewRecorder()
+	testHandler.UpdateAgent(updateW, updateReq)
+	if updateW.Code != http.StatusOK {
+		t.Fatalf("UpdateAgent: expected 200, got %d: %s", updateW.Code, updateW.Body.String())
+	}
+	var updateResp AgentResponse
+	if err := json.NewDecoder(updateW.Body).Decode(&updateResp); err != nil {
+		t.Fatalf("decode UpdateAgent response: %v", err)
+	}
+	if updateResp.ReadOnly {
+		t.Fatalf("expected ReadOnly=false after update, got true")
+	}
+}

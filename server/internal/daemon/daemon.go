@@ -7779,6 +7779,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		IssueStatuses:                    convertIssueStatusesForEnv(task.IssueStatuses),
 		IssueStatusesOmitted:             task.IssueStatusesOmitted,
 		ConnectedApps:                    task.ConnectedApps,
+		ReadOnly:                         task.Agent != nil && task.Agent.ReadOnly,
 	}
 
 	// A local_directory task gets a fresh CODEX_HOME but mounts the same
@@ -8702,6 +8703,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		OpenclawMode:           openclawMode,
 		ClaudeSettingsPath:     env.ClaudeSettingsPath,
 		QwenpawWorkspace:       env.QwenpawWorkspace,
+		ReadOnly:               task.Agent != nil && task.Agent.ReadOnly,
 	}
 	// Some providers do not reliably load the per-task runtime config files we
 	// write into the task workdir:

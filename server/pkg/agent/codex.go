@@ -384,6 +384,9 @@ func buildCodexArgs(opts ExecOptions, logger *slog.Logger) []string {
 	if opts.ServiceTier == codexFastServiceTier {
 		launchArgs = enforceCodexFastMode(launchArgs, logger)
 	}
+	if opts.ReadOnly {
+		launchArgs = append(launchArgs, "--sandbox", "read-only")
+	}
 	return append(args, launchArgs...)
 }
 
@@ -2081,13 +2084,17 @@ func (c *codexClient) startOrResumeThread(ctx context.Context, opts ExecOptions,
 	// Confirmed end-to-end against codex-cli 0.144.6 driving the real
 	// app-server (thread/start -> turn/start) with developerInstructions unset
 	// (MUL-5392).
+	sandbox := any(nil)
+	if opts.ReadOnly {
+		sandbox = "read-only"
+	}
 	startParams := map[string]any{
 		"model":                  nilIfEmpty(opts.Model),
 		"modelProvider":          nil,
 		"profile":                nil,
 		"cwd":                    opts.Cwd,
 		"approvalPolicy":         nil,
-		"sandbox":                nil,
+		"sandbox":                sandbox,
 		"config":                 nil,
 		"baseInstructions":       nil,
 		"developerInstructions":  nil,

@@ -1090,6 +1090,14 @@ func buildClaudeArgs(opts ExecOptions, logger *slog.Logger) []string {
 		// clarification belongs in an issue comment instead.
 		"--disallowedTools", "AskUserQuestion",
 	}
+	if opts.ReadOnly {
+		args = append(args,
+			"--disallowedTools", "Bash",
+			"--disallowedTools", "Edit",
+			"--disallowedTools", "Write",
+			"--disallowedTools", "NotebookEdit",
+		)
+	}
 	if hasManagedMcpConfig(opts.McpConfig) {
 		// A saved agent-level config is authoritative, including an explicitly
 		// empty object. With no managed config, omit strict mode so Claude can

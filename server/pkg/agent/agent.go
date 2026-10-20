@@ -138,6 +138,7 @@ type ExecOptions struct {
 	// EnableTaskSupplement, to accept additional messages; other providers
 	// ignore it.
 	CursorHookCommand []string
+	ReadOnly          bool // enforces read-only usage (no writes/edits, no execs)
 	// piMcpExtensionPath is set by piBackend.Execute after it writes the
 	// temporary MCP extension. The daemon does not fill it.
 	piMcpExtensionPath string

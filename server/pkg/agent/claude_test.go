@@ -1321,3 +1321,22 @@ func TestBuildClaudeArgsManagedSkillSettingsWins(t *testing.T) {
 		t.Fatalf("unrelated custom arg was dropped: %v", args)
 	}
 }
+
+func TestBuildClaudeArgs_ReadOnly(t *testing.T) {
+	args := buildClaudeArgs(ExecOptions{
+		ReadOnly: true,
+	}, slog.Default())
+
+	expectedDisallowed := []string{"AskUserQuestion", "Bash", "Edit", "Write", "NotebookEdit"}
+	disallowed := make(map[string]bool)
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--disallowedTools" {
+			disallowed[args[i+1]] = true
+		}
+	}
+	for _, tool := range expectedDisallowed {
+		if !disallowed[tool] {
+			t.Errorf("expected tool %q to be disallowed, got %v", tool, args)
+		}
+	}
+}

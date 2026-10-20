@@ -233,6 +233,7 @@ type TaskContextForEnv struct {
 	InitiatorID    string
 	InitiatorName  string
 	InitiatorEmail string
+	ReadOnly       bool
 }
 
 // SkillContextForEnv represents a skill to be written into the execution environment.
