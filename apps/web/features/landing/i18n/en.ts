@@ -523,6 +523,24 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.6.6",
+        date: "2026-10-20",
+        title: "Cross-provider candidate fallback, read-only mode, and member runtime pools",
+        changes: [],
+        features: [
+          "Candidate runtime pools now support cross-provider fallbacks: agents failover smoothly between Claude, Codex, and Antigravity runtimes.",
+          "Agent read-only execution mode: easily toggle agents into safe read-only operation to restrict unauthorized file modifications or command execution.",
+          "Collaborative candidate pools: workspace members can now contribute their local daemon runtimes to shared agent candidate pools.",
+        ],
+        improvements: [
+          "Dynamic runtime authorization: task claims validate against candidate pools for resilient multi-machine load balancing.",
+          "Clear visual indicators for read-only status and member pool contribution controls in agent profile and detail views.",
+        ],
+        fixes: [
+          "Incompatible model parameter handling: automatically sanitizes provider-specific models and parameters when failing over across heterogeneous runtime providers.",
+        ],
+      },
+      {
         version: "0.6.5",
         date: "2026-10-20",
         title: "Upstream sync (v0.6.4), test harnesses, and persistent capacity synchronization",
