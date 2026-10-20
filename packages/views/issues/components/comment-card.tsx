@@ -61,6 +61,7 @@ import { useCommentAnnotations } from "./use-comment-annotations";
 import { useAttachmentVersions } from "./deliverables/attachment-versions";
 import { VersionBadge } from "./deliverables/version-badge";
 import { useRunCommentMotion } from "./use-run-comment-motion";
+import { WakeupSourceChip } from "./wakeup-source-chip";
 
 const commentActionClassName =
   "text-muted-foreground aria-expanded:bg-transparent aria-expanded:hover:bg-muted dark:aria-expanded:hover:bg-muted/50";
@@ -103,9 +104,7 @@ function StickyHeaderShell({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 interface CommentCardProps {
   issueId: string;
@@ -159,9 +158,7 @@ interface CommentCardProps {
   highlightedCommentId?: string | null;
 }
 
-// ---------------------------------------------------------------------------
 // Shared delete confirmation dialog
-// ---------------------------------------------------------------------------
 
 function DeleteCommentDialog({
   open,
@@ -202,9 +199,7 @@ function DeleteCommentDialog({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Standalone attachment list — renders attachments not already in the markdown
-// ---------------------------------------------------------------------------
 
 export function AttachmentList({
   attachments,
@@ -355,9 +350,7 @@ function TaskCommentRetryButton({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Shared edit-attachment state hook
-// ---------------------------------------------------------------------------
 
 const NEVER_STEER = () => false;
 
@@ -624,9 +617,7 @@ function CommentRevisionConflict({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Single comment row (used for both parent and replies within the same Card)
-// ---------------------------------------------------------------------------
 
 function CommentRow({
   runHeader,
@@ -729,6 +720,10 @@ function CommentRow({
 
         <SteerBadge issueId={issueId} entry={entry} />
         {runHeader}
+
+        {entry.actor_type === "agent" && entry.source_task_id && (
+          <WakeupSourceChip issueId={issueId} taskId={entry.source_task_id} />
+        )}
 
         {isResolution && (
           <span className="text-caption font-medium text-success">
@@ -994,9 +989,7 @@ export function AgentRunComment({ run, standalone = false, commentProps, enterin
   );
 }
 
-// ---------------------------------------------------------------------------
 // CommentCard — One Card per thread (parent + all replies flat inside)
-// ---------------------------------------------------------------------------
 
 // A quick action posts an ordinary comment and is rendered as one (MUL-5465).
 // It briefly had a collapsed one-line header that expanded to reveal the
@@ -1234,6 +1227,9 @@ function CommentCardImpl({
 
                   <SteerBadge issueId={issueId} entry={entry} />
                   {renderRuns(entry.id, "header")}
+                  {entry.actor_type === "agent" && entry.source_task_id && (
+                    <WakeupSourceChip issueId={issueId} taskId={entry.source_task_id} />
+                  )}
                 </>
               )}
 

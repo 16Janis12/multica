@@ -1149,6 +1149,74 @@ describe("IssueDetail (shared)", () => {
     expect(screen.queryByText("Properties")).not.toBeInTheDocument();
   });
 
+  // The peek's close button lives in the host's trailing controls, so every
+  // state the peek can show must carry them (review of #8886).
+  function renderPeek(issueId = "issue-1") {
+    const queryClient = createTestQueryClient();
+    return render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <QueryClientProvider client={queryClient}>
+          <IssueDetail
+            issueId={issueId}
+            variant="peek"
+            onDelete={() => {}}
+            leadingAction={<span data-testid="peek-nav" />}
+            trailingActions={<button type="button">Close preview</button>}
+          />
+        </QueryClientProvider>
+      </I18nProvider>,
+    );
+  }
+
+  it("keeps the peek's host controls while the issue is loading", () => {
+    mockApiObj.getIssue.mockReturnValue(new Promise(() => {}));
+    renderPeek();
+    expect(screen.getByTestId("peek-nav")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close preview" })).toBeInTheDocument();
+  });
+
+  it("keeps the peek's host controls when the issue cannot be loaded", async () => {
+    mockApiObj.getIssue.mockRejectedValue(new Error("Not found"));
+    renderPeek("nonexistent-id");
+    await waitFor(() => {
+      expect(
+        screen.getByText("This issue does not exist or has been deleted in this workspace."),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Close preview" })).toBeInTheDocument();
+  });
+
+  it("renders the peek variant as one column with property pills and host actions", async () => {
+    const queryClient = createTestQueryClient();
+    render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <QueryClientProvider client={queryClient}>
+          <IssueDetail
+            issueId="issue-1"
+            variant="peek"
+            leadingAction={<span data-testid="peek-nav" />}
+            trailingActions={<button type="button">Close preview</button>}
+          />
+        </QueryClientProvider>
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Implement authentication")).toBeInTheDocument();
+    });
+
+    // No resizable sidebar: the properties become pills under the title.
+    expect(screen.queryByTestId("panel-group")).not.toBeInTheDocument();
+    expect(screen.queryByText("Properties")).not.toBeInTheDocument();
+    expect(screen.getByTestId("project-picker")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
+    // The host's controls replace the sidebar toggle.
+    expect(screen.getByTestId("peek-nav")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close preview" })).toBeInTheDocument();
+    // The header leaf names the issue by identifier only — the title is right below.
+    expect(screen.getByRole("link", { name: mockIssue.identifier })).toBeInTheDocument();
+  });
+
   it("pins the comment composer to the scroll viewport on a wide screen", async () => {
     const { container } = renderIssueDetail();
 
@@ -1457,8 +1525,15 @@ describe("IssueDetail (shared)", () => {
     });
     await waitFor(() => expect(screen.getAllByText(reply.content!)).toHaveLength(1));
     await waitFor(() => expect(container.querySelector(`[data-run-comment-id="${task.id}"]`)).toBeNull());
-    expect(container.querySelector(`[data-run-slot-id="${task.id}"]`)).toBe(assignmentSlot);
     const replyBlock = container.querySelector("#comment-assignment-reply")!;
+    const parentBlock = container.querySelector("#comment-comment-1")!;
+    if (parentId) {
+      expect(parentBlock).toContainElement(replyBlock as HTMLElement);
+      expect(parentBlock.querySelector(`[data-run-slot-id="${task.id}"]`)).not.toBeNull();
+    } else {
+      expect(parentBlock).not.toContainElement(replyBlock as HTMLElement);
+      expect(container.querySelector(`[data-run-slot-id="${task.id}"]`)).toBe(assignmentSlot);
+    }
     expect(replyBlock.querySelector(`[data-run-id="${task.id}"]`)).not.toBeNull();
     expect(container.querySelectorAll(`[data-run-id="${task.id}"]`)).toHaveLength(1);
     const headerLog = within(replyBlock as HTMLElement).getByRole("button", { name: "Open full log" });
@@ -1613,7 +1688,12 @@ describe("IssueDetail (shared)", () => {
       expect(within(slot).getByText("Cancelled by the system")).toBeInTheDocument();
       expect(within(slot).queryByText("task cancelled by server")).not.toBeInTheDocument();
       expect(within(slot).queryByText("Failed")).not.toBeInTheDocument();
-      expect(screen.getAllByRole("button", { name: "Retry run" })).toHaveLength(1);
+      // Once in the timeline. The sidebar's execution log lists the latest
+      // runs with their own row actions, which is a separate surface.
+      const timelineRetries = screen
+        .getAllByRole("button", { name: "Retry run" })
+        .filter((button) => !button.closest(".\\@container\\/execution-log"));
+      expect(timelineRetries).toHaveLength(1);
     };
 
     it("renders the run block in the notice's thread slot and retries that run", async () => {
@@ -1998,6 +2078,8 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getByText(/set this issue to keep its status when PRs merge/i)).toBeInTheDocument();
   });
 
+  // MUL-7680: the child-done system rule's comment is the woken agent's
+  // instruction; people read one timeline line that can reveal it.
   it("renders activity rows with unknown status values without crashing", async () => {
     mockApiObj.listTimeline.mockResolvedValue([
       {
@@ -2241,6 +2323,39 @@ describe("IssueDetail (shared)", () => {
   });
 
   describe("highlightCommentId scroll-to-comment", () => {
+    it("folds an assignment reply with its resolved parent and unfolds that thread for a notification", async () => {
+      const run: AgentTask = { id: "ba2e8d1c-7f9b-4e2a-9c1d-123456789abc", agent_id: "agent-1", runtime_id: "runtime-1", issue_id: "issue-1",
+        kind: "direct", status: "completed", priority: 0, created_at: "2026-01-16T00:00:00Z", started_at: null, dispatched_at: null,
+        completed_at: "2026-01-16T00:01:00Z", result: null, error: null, delivered_comment_ids: [] };
+      const root = { ...mockTimeline[0]!, resolved_at: "2026-01-17T00:00:00Z" };
+      const target = { ...mockTimeline[1]!, id: "assigned-reply", parent_id: root.id, source_task_id: run.id,
+        content: "Assignment reply in the resolved discussion" };
+      mockApiObj.listTimeline.mockResolvedValue([root, target]);
+      mockApiObj.listTasksByIssue.mockResolvedValue([run]);
+      const client = createTestQueryClient();
+      const { container, rerender } = render(<I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <QueryClientProvider client={client}>
+          <IssueDetail issueId="issue-1" />
+        </QueryClientProvider>
+      </I18nProvider>);
+      await screen.findByRole("button", { name: /2 resolved comments/ });
+      expect(container.querySelector(`#comment-${target.id}`)).toBeNull();
+
+      rerender(<I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <QueryClientProvider client={client}>
+          <IssueDetail issueId="issue-1" highlightCommentId={target.id} />
+        </QueryClientProvider>
+      </I18nProvider>);
+      await waitFor(() => expect(container.querySelector(`#comment-${target.id}`))
+        .toHaveClass(highlightedCommentBackgroundClass));
+      expect(container.querySelector(`#comment-${root.id}`))
+        .toContainElement(container.querySelector(`#comment-${target.id}`) as HTMLElement);
+      expect(screen.getAllByText(target.content)).toHaveLength(1);
+      expect(container.querySelectorAll(`[data-run-id="${run.id}"]`)).toHaveLength(1);
+      expect(within(container.querySelector(`#comment-${target.id}`) as HTMLElement)
+        .getByRole("button", { name: "Open full log" })).toBeInTheDocument();
+    });
+
     it.each(["root", "reply"])("unfolds an assignment run with a resolved %s when a notification targets a hidden reply", async (resolved) => {
       const run: AgentTask = { id: "ba2e8d1c-7f9b-4e2a-9c1d-123456789abc", agent_id: "agent-1", runtime_id: "runtime-1", issue_id: "issue-1",
         status: "completed", priority: 0, created_at: "2026-01-16T00:00:00Z", started_at: null, dispatched_at: null,
@@ -2504,6 +2619,12 @@ describe("IssueDetail (shared)", () => {
 
       const nav = await screen.findByRole("navigation", { name: "Jump to comment thread" });
       expect(document.getElementById("comment-reply-1")).toBeNull();
+      expect(within(nav).queryByRole("button", { name: /: Reply inside resolved thread$/ })).toBeNull();
+      act(() => within(nav).getByRole("button", { name: "Resolved root (resolved)" }).focus());
+      fireEvent.click(
+        within(nav.parentElement!).getByRole("button", { name: "Show 1 reply" }),
+        { detail: 0 },
+      );
       fireEvent.click(within(nav).getByRole("button", { name: /: Reply inside resolved thread$/ }));
 
       await waitFor(() => {

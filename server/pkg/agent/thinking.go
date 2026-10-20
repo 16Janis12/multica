@@ -430,6 +430,8 @@ func normalizeCodexModelLabel(id, label string) string {
 	switch id {
 	case "gpt-6-astra":
 		return "GPT-6 Astra"
+	case "gpt-6.1-sol":
+		return "GPT-6.1 Sol"
 	case "gpt-6-sol":
 		return "GPT-6 Sol"
 	case "gpt-6-luna":
@@ -912,6 +914,20 @@ var providerThinkingEnums = map[string]map[string]bool{
 		"high":    true,
 		"xhigh":   true,
 		"max":     true,
+	},
+	// muse takes Meta Muse Code's closed MSP vocabulary, declared on the
+	// `reasoningEffort` field of `turn/start`. The host re-validates the tier
+	// against the session model before it samples, so this list is the
+	// provider universe, not a per-model promise.
+	"muse": {
+		"none":    true,
+		"minimal": true,
+		"low":     true,
+		"medium":  true,
+		"high":    true,
+		"xhigh":   true,
+		"max":     true,
+		"ultra":   true,
 	},
 	// omp (Oh-My-Pi) dispatches to the pi backend (see BuiltinRuntimes), so it
 	// inherits pi's fixed CLI vocabulary; discoverOmpModels narrows it to each

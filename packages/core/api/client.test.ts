@@ -1589,6 +1589,36 @@ describe("ApiClient", () => {
   });
 
   describe("getAttachment", () => {
+    it("uses the attachment-owned workspace endpoint for Markdown downloads", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "att-1",
+            workspace_id: "ws-b",
+            uploader_type: "member",
+            uploader_id: "u-1",
+            filename: "report.md",
+            url: "https://static.example.test/report.md",
+            download_url: "/api/attachments/att-1/signed-download?sig=abc",
+            attachment_download_url: "/api/attachments/att-1/signed-download?sig=def&dl=1",
+            content_type: "text/markdown",
+            size_bytes: 123,
+            created_at: "2026-05-11T00:00:00Z",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const client = new ApiClient("https://api.example.test");
+
+      const att = await client.getAttachmentForDownload("att-1");
+
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://api.example.test/api/attachments/att-1/download-metadata",
+      );
+      expect(att.attachment_download_url).toContain("dl=1");
+    });
+
     it("returns the parsed attachment for a well-formed response", async () => {
       vi.stubGlobal(
         "fetch",
@@ -2577,6 +2607,19 @@ describe("ApiClient workspace MCP servers", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.transport).toBe("websocket");
+  });
+
+  it("keeps the agent count and degrades a malformed one to unknown", async () => {
+    stubJSON([
+      { ...server, id: "srv-1", agent_count: 3 },
+      { ...server, id: "srv-2", agent_count: "many" },
+      { ...server, id: "srv-3" },
+    ]);
+
+    const result = await new ApiClient("https://api.example.test")
+      .listWorkspaceMcpServers("ws-1");
+
+    expect(result.map((item) => item.agent_count)).toEqual([3, undefined, undefined]);
   });
 
   it("POSTs a name and entry when creating a library server", async () => {

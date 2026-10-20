@@ -1,50 +1,13 @@
 "use client";
 
 /**
- * AttachmentPreviewModal — full-window viewer for an attachment.
+ * Shared full-window attachment viewer and standalone preview page.
+ * Media uses signed download URLs; text uses the authenticated content endpoint
+ * to avoid storage CORS and attachment-disposition restrictions.
  *
- * The file gets the whole window (MUL-7642): no card, no max width. A fixed
- * near-black stage sits behind the content whatever the theme — a photo, a
- * PDF page and a white HTML document all read against it — and the chrome
- * over it (top bar, prev / next, messages on the stage) wears the dark token
- * set via a `dark` class on each chrome element. Documents that are read
- * rather than looked at (Markdown, text) render on a centered sheet that
- * keeps the app's own theme.
- *
- * Single viewer for every previewable kind. Handles 9 PreviewKinds:
- *
- *   - image : <img> on the shared ZoomCanvas — fit on open, then wheel /
- *             drag / pinch / double-click / keyboard zoom, same controls as
- *             the Mermaid viewer.
- *   - pdf   : <iframe src={download_url}> — relies on Chromium's PDFium
- *             plugin. On desktop, requires webPreferences.plugins=true
- *             (see apps/desktop/src/main/index.ts).
- *   - video : <video controls src={download_url}>
- *   - audio : <audio controls src={download_url}>
- *
- *   - markdown : fetch text via api.getAttachmentTextContent, render via
- *                the existing ReadonlyContent (full mention/mermaid/katex
- *                pipeline included).
- *   - html     : fetch text, hand to <iframe srcdoc={text}
- *                sandbox="allow-scripts">. The iframe runs in an opaque
- *                origin: scripts execute (chart libraries / vanilla SVG
- *                JS work), but cookie / localStorage / parent access /
- *                top-navigation / popups / forms stay blocked because
- *                `allow-same-origin` is intentionally NOT included.
- *                Laid out at a device width on demand, or shown as source.
- *   - table    : fetch text, parse CSV / TSV, sortable virtualized table.
- *   - structured : fetch text, parse JSON / JSON Lines / YAML into a
- *                collapsible tree, with the source one toggle away.
- *   - text     : fetch text, highlight with lowlight if the extension
- *                maps to a known hljs language, with numbered lines and a
- *                wrap toggle.
- *
- * The same top bar and stage also stand alone as the "open in new tab" page
- * (`AttachmentPreviewStandalone`), so a file looks the same in both.
- *
- * Media types load directly from the CloudFront signed `download_url`.
- * Text types go through `/api/attachments/{id}/content` to sidestep
- * CloudFront CORS (not configured) + Content-Disposition: attachment.
+ * HTML runs in a sandboxed opaque-origin iframe: allow scripts for interactive
+ * artifacts, but do not add allow-same-origin, navigation, popup, or form privileges.
+ * Desktop PDF previews require the Chromium PDF plugin to be enabled.
  */
 
 import {
@@ -58,6 +21,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { toast } from "sonner";
 import {
   PreviewTooLargeError,
   PreviewUnsupportedError,
@@ -66,6 +30,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Code,
+  Copy,
   Download,
   ExternalLink,
   File,
@@ -92,6 +57,7 @@ import {
 import type { Attachment } from "@multica/core/types";
 import { paths, useWorkspaceSlug } from "@multica/core/paths";
 import { cn } from "@multica/ui/lib/utils";
+import { copyImage } from "@multica/ui/lib/clipboard";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import {
   UI_EASE_OUT,
@@ -100,6 +66,7 @@ import {
 import { useT } from "../i18n";
 import { useNavigation } from "../navigation";
 import { openExternal } from "../platform";
+import { isDesktopShell } from "../platform/local-directory";
 import { useImmersiveMode } from "../platform/use-immersive-mode";
 import { ReadonlyContent } from "./readonly-content";
 import {
@@ -135,9 +102,7 @@ import {
   type HtmlViewport,
 } from "./html-viewport-frame";
 
-// ---------------------------------------------------------------------------
 // Preview source — full attachment, or URL-only (media types only)
-// ---------------------------------------------------------------------------
 //
 // `full` carries the resolved Attachment record and supports every PreviewKind
 // (text types require the attachment id to call /api/attachments/{id}/content).
@@ -225,9 +190,7 @@ function normalize(source: PreviewSource): PreviewState {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Public props
-// ---------------------------------------------------------------------------
 
 /**
  * Position of this preview inside a surface's image sequence (MUL-5752).
@@ -275,9 +238,7 @@ interface AttachmentPreviewModalProps {
   onOpenOverview?: () => void;
 }
 
-// ---------------------------------------------------------------------------
 // Hook — local state + ready-to-mount modal JSX
-// ---------------------------------------------------------------------------
 //
 // Why no React context / provider: packages/views/ cannot mount a Context.Provider
 // inside CoreProvider (in packages/core/), and threading a new provider through
@@ -335,9 +296,7 @@ export function useAttachmentPreview(): AttachmentPreviewHandle {
   return useMemo(() => ({ open, tryOpen, modal }), [open, tryOpen, modal]);
 }
 
-// ---------------------------------------------------------------------------
 // Image swap without a blank frame
-// ---------------------------------------------------------------------------
 
 // Returns the last image URL that finished decoding, holding the previous one
 // on screen while the next downloads. Swapping `<img src>` (or remounting the
@@ -416,9 +375,7 @@ export function PreviewImagePrefetch({ source }: { source: PreviewSource }) {
   return null;
 }
 
-// ---------------------------------------------------------------------------
 // Viewer — frame + dispatch
-// ---------------------------------------------------------------------------
 
 // Desktop window chrome. The viewer covers the whole window, including the
 // top bar's drag region, so it declares its own: the viewer is `no-drag`
@@ -635,9 +592,7 @@ export function AttachmentPreviewModal({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Panel — top bar + stage
-// ---------------------------------------------------------------------------
 
 const KIND_ICONS: Record<PreviewKind, LucideIcon> = {
   image: ImageIcon,
@@ -801,6 +756,19 @@ function PreviewPanel({
   // reports against the next one.
   const imageLoadError =
     mediaUrl !== "" && mediaUrl === targetUrl ? onImageError : undefined;
+
+  // Copying reads the image's bytes from script. The desktop renderer can
+  // read any origin; web script can't read the storage CDN (it sends no CORS
+  // headers), and there the browser's own context menu has Copy image. Copies
+  // the frame on screen, which during a sequence swap is still the last one.
+  const canCopyImage = kind === "image" && isDesktopShell();
+  const handleCopyImage = async () => {
+    if (await copyImage(mediaUrl)) {
+      toast.success(t(($) => $.image.image_copied));
+    } else {
+      toast.error(t(($) => $.image.copy_image_failed));
+    }
+  };
 
   // Natural size is carried with the URL it was measured from, so a panel
   // reused for a different attachment can never fit the new image against the
@@ -999,6 +967,15 @@ function PreviewPanel({
               <ExternalLink className="size-4" />
             </ChromeButton>
           )}
+          {canCopyImage && (
+            <ChromeButton
+              label={t(($) => $.image.copy_image)}
+              disabled={!mediaUrl}
+              onClick={() => void handleCopyImage()}
+            >
+              <Copy className="size-4" />
+            </ChromeButton>
+          )}
           <ChromeButton label={t(($) => $.image.download)} onClick={onDownload}>
             <Download className="size-4" />
           </ChromeButton>
@@ -1100,9 +1077,7 @@ function PreviewPanel({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Chrome controls
-// ---------------------------------------------------------------------------
 
 // Top-bar icon button. Sits inside the `dark` header, so the semantic tokens
 // resolve to the dark set whatever the app theme is.
@@ -1224,9 +1199,7 @@ function SequenceButton({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Image — zoom canvas
-// ---------------------------------------------------------------------------
 
 function ImagePreview({
   state,
@@ -1304,9 +1277,7 @@ function ImagePreview({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Dispatch
-// ---------------------------------------------------------------------------
 
 // What the top bar decided about how the file shows — see PreviewPanel.
 interface StageView {
@@ -1539,9 +1510,7 @@ function DocumentSheet({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Text-backed preview — fetches body once, then hands to the render prop
-// ---------------------------------------------------------------------------
 
 // React Query owns server state per the project convention; re-opening the
 // same attachment hits the cache instead of re-fetching. Query is keyed on
@@ -1595,9 +1564,7 @@ function TextBackedPreview({
   return <>{render(query.data.text)}</>;
 }
 
-// ---------------------------------------------------------------------------
 // Fallback — used for 413 / 415 / unknown kinds. Sits on the stage, so dark.
-// ---------------------------------------------------------------------------
 
 function UnsupportedFallback({
   message,
@@ -1623,9 +1590,7 @@ function UnsupportedFallback({
   );
 }
 
-// ---------------------------------------------------------------------------
 // Standalone — the viewer's top bar and stage as a page of their own
-// ---------------------------------------------------------------------------
 
 /**
  * The "Open in new tab" destination: the same bar and stage as the viewer,

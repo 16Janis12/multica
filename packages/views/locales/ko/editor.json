@@ -40,6 +40,9 @@
     "delete": "삭제",
     "link_copied": "링크를 복사했습니다",
     "copy_link_failed": "링크를 복사하지 못했습니다",
+    "copy_image": "이미지 복사",
+    "image_copied": "이미지를 복사했습니다",
+    "copy_image_failed": "이미지를 복사하지 못했습니다",
     "canvas_label": "이미지 캔버스. 드래그하여 이동, 스크롤하여 확대/축소, 두 번 클릭하여 실제 크기로 전환할 수 있습니다.",
     "unavailable": "이 이미지를 불러올 수 없어 건너뛰었습니다."
   },
@@ -107,6 +110,7 @@
   },
   "code_block": {
     "html_preview": "HTML 미리보기",
+    "close_preview": "닫기",
     "copy_code": "코드 복사",
     "show_preview": "미리보기 표시",
     "show_source": "소스 표시",
@@ -161,5 +165,18 @@
     "commands": {
       "note": "메모 추가 — 에이전트를 트리거하지 않음"
     }
+  },
+  "table": {
+    "reset_widths": "열 너비 초기화",
+    "expand": "표 펼치기",
+    "copy_markdown": "Markdown으로 복사",
+    "copy_csv": "CSV로 복사",
+    "copied": "복사됨",
+    "resize_column": "'{{name}}' 열 너비 조정",
+    "expanded_title": "표",
+    "filter_placeholder": "행 필터",
+    "clear_filter": "필터 지우기",
+    "no_matches": "일치하는 행이 없습니다",
+    "close": "닫기"
   }
 }
