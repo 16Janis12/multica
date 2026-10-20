@@ -523,6 +523,33 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.6.5",
+        date: "2026-10-20",
+        title: "Upstream sync (v0.6.4), test harnesses, and persistent capacity synchronization",
+        changes: [],
+        features: [
+          "Full sync with upstream v0.6.4: Interactive Markdown tables, Meta Muse Code MSP runtime, and Cursor live-run steering.",
+          "Preset quick actions can post comments without needing agent or squad selection.",
+          "Inbox filtering to display exclusively issues with no active agent.",
+          "Direct issue renaming from action menus across list and board views.",
+          "Dedicated server daemon and handler test binaries for end-to-end integration and mock validation.",
+        ],
+        improvements: [
+          "Enlarged HTML previews preserve input and interaction state seamlessly.",
+          "Comment outline collapses resolved threads by default.",
+          "Smoother page navigation under high-frequency update streams.",
+          "Expanded Gemini model pricing estimates.",
+          "Quick action documentation guide.",
+        ],
+        fixes: [
+          "Pre-flight impact analysis before transitioning shared runtimes to private, cleanly unbinding and canceling affected runs.",
+          "Autopilot pause and resume safety when runtime privacy toggles.",
+          "Validation checks for private runtimes at agent save time rather than runtime failure.",
+          "Steering guidance delivery preserved for in-flight tasks and slow-starting Claude runs.",
+          "Prevention of unwanted auto-requeuing for canceled comment-triggered tasks.",
+        ],
+      },
+      {
         version: "0.6.4",
         date: "2026-10-20",
         title: "Interactive Markdown tables, Muse Code, safer private runtimes, and steadier runs",
