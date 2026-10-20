@@ -565,6 +565,30 @@ func TestModelKnownIncompatibleWithProvider(t *testing.T) {
 			model:    "claude-sonnet-4-6",
 			want:     false,
 		},
+		{
+			name:     "antigravity gemini model is compatible with antigravity",
+			provider: "antigravity",
+			model:    "gemini-2.5-flash",
+			want:     false,
+		},
+		{
+			name:     "claude model is incompatible with antigravity",
+			provider: "antigravity",
+			model:    "claude-sonnet-4-6",
+			want:     true,
+		},
+		{
+			name:     "antigravity gemini model is incompatible with claude",
+			provider: "claude",
+			model:    "gemini-2.5-flash",
+			want:     true,
+		},
+		{
+			name:     "antigravity gemini model is incompatible with codex",
+			provider: "codex",
+			model:    "gemini-2.5-flash",
+			want:     true,
+		},
 	}
 
 	for _, tc := range cases {

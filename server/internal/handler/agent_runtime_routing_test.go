@@ -87,3 +87,57 @@ func TestAgentToResponse_DefaultsWhenUnconfigured(t *testing.T) {
 		t.Fatalf("expected default routing_strategy capacity_headroom, got %s", resp.RoutingStrategy)
 	}
 }
+
+func TestIsTaskRuntimeAuthorized(t *testing.T) {
+	primaryID := util.MustParseUUID("00000000-0000-0000-0000-000000000001")
+	cand1 := util.MustParseUUID("00000000-0000-0000-0000-000000000002")
+	cand2 := util.MustParseUUID("00000000-0000-0000-0000-000000000003")
+	unrelated := util.MustParseUUID("00000000-0000-0000-0000-000000000009")
+
+	agent := db.Agent{
+		RuntimeID:           primaryID,
+		RuntimeCandidateIds: []pgtype.UUID{cand1, cand2},
+	}
+
+	if !isTaskRuntimeAuthorized(agent, primaryID) {
+		t.Fatalf("expected primary runtime to be authorized")
+	}
+	if !isTaskRuntimeAuthorized(agent, cand1) {
+		t.Fatalf("expected candidate 1 to be authorized")
+	}
+	if !isTaskRuntimeAuthorized(agent, cand2) {
+		t.Fatalf("expected candidate 2 to be authorized")
+	}
+	if isTaskRuntimeAuthorized(agent, unrelated) {
+		t.Fatalf("unrelated runtime must not be authorized")
+	}
+}
+
+func TestSanitizeTaskAgentModel(t *testing.T) {
+	// Compatible models stay intact
+	m, tl, st := sanitizeTaskAgentModel("antigravity", "gemini-2.5-flash", "high", "standard")
+	if m != "gemini-2.5-flash" || tl != "high" || st != "standard" {
+		t.Fatalf("expected antigravity gemini model preserved, got %q, %q, %q", m, tl, st)
+	}
+
+	m, tl, st = sanitizeTaskAgentModel("claude", "claude-sonnet-4-6", "high", "")
+	if m != "claude-sonnet-4-6" || tl != "high" {
+		t.Fatalf("expected claude model preserved, got %q, %q", m, tl)
+	}
+
+	// Incompatible cross-provider models are cleared to default
+	m, tl, st = sanitizeTaskAgentModel("claude", "gemini-2.5-flash", "high", "standard")
+	if m != "" || tl != "" || st != "" {
+		t.Fatalf("expected incompatible gemini model cleared for claude, got %q, %q, %q", m, tl, st)
+	}
+
+	m, tl, st = sanitizeTaskAgentModel("antigravity", "claude-sonnet-4-6", "high", "")
+	if m != "" || tl != "" || st != "" {
+		t.Fatalf("expected incompatible claude model cleared for antigravity, got %q, %q, %q", m, tl, st)
+	}
+
+	m, tl, st = sanitizeTaskAgentModel("codex", "gemini-2.5-flash", "", "")
+	if m != "" {
+		t.Fatalf("expected incompatible gemini model cleared for codex, got %q", m)
+	}
+}

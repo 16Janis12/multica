@@ -163,6 +163,8 @@ export function RuntimeCandidatePoolPicker({
                       const isChecked = candidateIds.includes(r.id);
                       const isDefault = defaultRuntimeId === r.id;
                       const isOnline = r.status === "online";
+                      const defaultRuntime = runtimes.find((rt) => rt.id === defaultRuntimeId);
+                      const isCrossProvider = defaultRuntime && r.provider !== defaultRuntime.provider;
                       return (
                         <label
                           key={r.id}
@@ -179,6 +181,11 @@ export function RuntimeCandidatePoolPicker({
                             {isDefault && (
                               <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">
                                 (default)
+                              </span>
+                            )}
+                            {isCrossProvider && (
+                              <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">
+                                (cross-provider)
                               </span>
                             )}
                           </span>

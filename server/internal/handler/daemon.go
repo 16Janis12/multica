@@ -31,7 +31,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/runtimeapps"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
-	"github.com/multica-ai/multica/server/pkg/agent"
+	agentpkg "github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -510,7 +510,7 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 						DaemonID:    strToText(req.DaemonID),
 						Name:        name,
 						RuntimeMode: "local",
-						Provider:    agent.ProfileRuntimeType(profile.RuntimeType, profile.ProtocolFamily),
+						Provider:    agentpkg.ProfileRuntimeType(profile.RuntimeType, profile.ProtocolFamily),
 						Status:      status,
 						DeviceInfo:  deviceInfo,
 						Metadata:    metadata,
@@ -541,7 +541,7 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, "failed to register runtime")
 				return
 			}
-			provider = agent.ProfileRuntimeType(profile.RuntimeType, profile.ProtocolFamily)
+			provider = agentpkg.ProfileRuntimeType(profile.RuntimeType, profile.ProtocolFamily)
 			inserted = prow.Inserted
 			registered = db.AgentRuntime{
 				ID:             prow.ID,
@@ -703,7 +703,7 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 					DaemonID:    strToText(req.DaemonID),
 					Name:        name,
 					RuntimeMode: "local",
-					Provider:    agent.ProfileRuntimeType(profile.RuntimeType, profile.ProtocolFamily),
+					Provider:    agentpkg.ProfileRuntimeType(profile.RuntimeType, profile.ProtocolFamily),
 					Status:      "offline",
 					DeviceInfo:  strings.TrimSpace(req.DeviceName),
 					Metadata:    metadata,
@@ -2085,7 +2085,7 @@ func (h *Handler) finalizeClaimDelivery(
 		if aerr != nil {
 			return fmt.Errorf("re-read agent for delivery authorization: %w", aerr)
 		}
-		if agent.RuntimeID != task.RuntimeID {
+		if !isTaskRuntimeAuthorized(agent, task.RuntimeID) {
 			return &service.ClaimDeliveryAuthzError{
 				Reason: "error_agent_runtime_changed",
 				Detail: "agent runtime changed before delivery",
@@ -2397,6 +2397,29 @@ func applyFreshSessionRetryWorkdir(task db.AgentTaskQueue, resp *AgentTaskRespon
 	resp.PriorSessionResumeUnavailable = true
 }
 
+// isTaskRuntimeAuthorized reports whether the claimed task's runtime is permitted for the agent.
+// It accepts either the agent's pinned RuntimeID or any candidate in RuntimeCandidateIds.
+func isTaskRuntimeAuthorized(agent db.Agent, taskRuntimeID pgtype.UUID) bool {
+	if agent.RuntimeID == taskRuntimeID {
+		return true
+	}
+	for _, candID := range agent.RuntimeCandidateIds {
+		if candID == taskRuntimeID {
+			return true
+		}
+	}
+	return false
+}
+
+// sanitizeTaskAgentModel returns the effective model, thinking level, and service tier,
+// clearing incompatible parameters if the model does not match the target runtime provider.
+func sanitizeTaskAgentModel(provider, model, thinkingLevel, serviceTier string) (string, string, string) {
+	if model != "" && agentpkg.ModelKnownIncompatibleWithProvider(provider, model) {
+		return "", "", ""
+	}
+	return model, thinkingLevel, serviceTier
+}
+
 func claimResponseAgentIdentityMatches(resp AgentTaskResponse) bool {
 	return resp.AgentID != "" && resp.Agent != nil && resp.Agent.ID == resp.AgentID
 }
@@ -2493,7 +2516,9 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 	// changing task state, but Agent mutations do not stay locked through HTTP
 	// response assembly. Recheck the freshly loaded Agent here so a rebind or
 	// owner change that committed after the claim cannot reach the daemon.
-	if agent.RuntimeID != task.RuntimeID {
+	// Tasks dispatched to a dynamic candidate pool carry a task.RuntimeID matching
+	// one of the agent's RuntimeCandidateIds rather than agent.RuntimeID.
+	if !isTaskRuntimeAuthorized(agent, task.RuntimeID) {
 		slog.Warn("daemon claim: agent runtime changed before delivery; refusing dispatch",
 			"task_id", uuidToString(task.ID),
 			"agent_id", uuidToString(task.AgentID),
@@ -2593,6 +2618,21 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 	if rc := bytes.TrimSpace(agent.RuntimeConfig); len(rc) > 0 && !bytes.Equal(rc, []byte("{}")) && !bytes.Equal(rc, []byte("null")) {
 		runtimeConfig = json.RawMessage(agent.RuntimeConfig)
 	}
+	agentModel, agentThinkingLevel, agentServiceTier := sanitizeTaskAgentModel(
+		runtime.Provider,
+		agent.Model.String,
+		agent.ThinkingLevel.String,
+		agent.ServiceTier.String,
+	)
+	if agent.Model.String != "" && agentModel == "" {
+		slog.Info("daemon claim: clearing incompatible model for runtime provider",
+			"task_id", uuidToString(task.ID),
+			"agent_id", uuidToString(agent.ID),
+			"configured_model", agent.Model.String,
+			"runtime_provider", runtime.Provider,
+		)
+	}
+
 	resp.Agent = &TaskAgentData{
 		ID:                    uuidToString(agent.ID),
 		Name:                  agent.Name,
@@ -2600,9 +2640,9 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 		CustomEnv:             customEnv,
 		CustomArgs:            customArgs,
 		McpConfig:             mcpConfig,
-		Model:                 agent.Model.String,
-		ThinkingLevel:         agent.ThinkingLevel.String,
-		ServiceTier:           agent.ServiceTier.String,
+		Model:                 agentModel,
+		ThinkingLevel:         agentThinkingLevel,
+		ServiceTier:           agentServiceTier,
 		RuntimeConfig:         runtimeConfig,
 		DisabledRuntimeSkills: disabledRuntimeSkillsFor(agent.DisabledRuntimeSkills, runtimeID, runtime.Provider),
 	}

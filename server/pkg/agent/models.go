@@ -481,6 +481,10 @@ func ModelKnownIncompatibleWithProvider(providerType, model string) bool {
 		if strings.HasPrefix(lookupID, "gpt-") || isOpenAIReasoningSeriesID(lookupID) {
 			return false
 		}
+	case "antigravity":
+		if strings.HasPrefix(lookupID, "gemini-") || strings.HasPrefix(lookupID, "auto-gemini-") {
+			return false
+		}
 	default:
 		return false
 	}

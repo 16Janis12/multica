@@ -32,12 +32,15 @@ import (
 const ChecksumManifestName = "checksums.txt"
 
 const defaultReleaseAPIBaseURL = "https://api.github.com"
+const defaultReleaseRepo = "16Janis12/multica"
 
 // MULTICA_RELEASE_API_BASE_URL points at a GitHub Releases API-compatible
 // mirror. MULTICA_RELEASE_DOWNLOAD_BASE_URL points at an artifact mirror
 // serving /<tag>/<asset-name>; when unset, the release-provided URLs win.
+// MULTICA_RELEASE_REPO overrides the GitHub repository (owner/repo).
 const releaseAPIBaseURLEnv = "MULTICA_RELEASE_API_BASE_URL"
 const releaseDownloadBaseURLEnv = "MULTICA_RELEASE_DOWNLOAD_BASE_URL"
+const releaseRepoEnv = "MULTICA_RELEASE_REPO"
 
 const DefaultUpdateDownloadTimeout = 120 * time.Second
 
@@ -46,6 +49,13 @@ func releaseAPIBaseURL() string {
 		return value
 	}
 	return defaultReleaseAPIBaseURL
+}
+
+func releaseRepo() string {
+	if value := strings.Trim(strings.TrimSpace(os.Getenv(releaseRepoEnv)), "/"); value != "" {
+		return value
+	}
+	return defaultReleaseRepo
 }
 
 func releaseDownloadBaseURL() string {
@@ -254,7 +264,7 @@ func verifyAssetSHA256(data []byte, expectedHex, assetName string) error {
 
 func fetchReleaseByTag(tag string) (*GitHubRelease, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, releaseAPIBaseURL()+"/repos/multica-ai/multica/releases/tags/"+url.PathEscape(tag), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/repos/%s/releases/tags/%s", releaseAPIBaseURL(), releaseRepo(), url.PathEscape(tag)), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +290,7 @@ func fetchReleaseByTag(tag string) (*GitHubRelease, error) {
 // FetchLatestRelease fetches the latest release tag from the multica GitHub repo.
 func FetchLatestRelease() (*GitHubRelease, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, releaseAPIBaseURL()+"/repos/multica-ai/multica/releases/latest", nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/repos/%s/releases/latest", releaseAPIBaseURL(), releaseRepo()), nil)
 	if err != nil {
 		return nil, err
 	}

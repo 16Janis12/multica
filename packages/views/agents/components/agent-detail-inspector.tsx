@@ -160,6 +160,15 @@ export function AgentDetailInspector({
     [agent.service_tier, agent.thinking_level, modelCatalog, runtime?.provider, update],
   );
 
+  const hasCrossProviderCandidates = useMemo(() => {
+    const candidateIds = agent.runtime_candidate_ids;
+    if (!candidateIds || candidateIds.length === 0 || !runtime) {
+      return false;
+    }
+    const candidateRuntimes = runtimes.filter((r) => candidateIds.includes(r.id));
+    return candidateRuntimes.some((r) => r.provider !== runtime.provider);
+  }, [agent.runtime_candidate_ids, runtimes, runtime]);
+
   return (
     <div className="space-y-8">
       <SettingsSection
@@ -276,15 +285,22 @@ export function AgentDetailInspector({
             label="Candidate Pool"
             size="select-wide"
           >
-            <RuntimeCandidatePoolPicker
-              candidateIds={agent.runtime_candidate_ids ?? []}
-              defaultRuntimeId={agent.runtime_id}
-              runtimes={runtimes}
-              members={members}
-              currentUserId={currentUserId}
-              canEdit={canEdit}
-              onChange={(ids) => update({ runtime_candidate_ids: ids })}
-            />
+            <div className="space-y-1.5">
+              <RuntimeCandidatePoolPicker
+                candidateIds={agent.runtime_candidate_ids ?? []}
+                defaultRuntimeId={agent.runtime_id}
+                runtimes={runtimes}
+                members={members}
+                currentUserId={currentUserId}
+                canEdit={canEdit}
+                onChange={(ids) => update({ runtime_candidate_ids: ids })}
+              />
+              {hasCrossProviderCandidates && (
+                <p className="text-xs text-muted-foreground">
+                  Cross-provider runtimes will fall back to their native default model if the selected model is incompatible.
+                </p>
+              )}
+            </div>
           </SettingsRow>
           {(agent.runtime_candidate_ids && agent.runtime_candidate_ids.length > 0) && (
             <SettingsRow
