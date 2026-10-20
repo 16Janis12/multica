@@ -825,14 +825,6 @@ func runAgentUpdate(cmd *cobra.Command, args []string) error {
 		v, _ := cmd.Flags().GetBool("allow-member-candidates")
 		body["allow_member_candidates"] = v
 	}
-	if cmd.Flags().Changed("candidate-runtimes") {
-		v, _ := cmd.Flags().GetStringSlice("candidate-runtimes")
-		body["runtime_candidate_ids"] = v
-	}
-	if cmd.Flags().Changed("routing-strategy") {
-		v, _ := cmd.Flags().GetString("routing-strategy")
-		body["routing_strategy"] = v
-	}
 	applyAgentPermissionFlags(cmd, body)
 	if cmd.Flags().Changed("status") {
 		v, _ := cmd.Flags().GetString("status")

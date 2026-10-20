@@ -2017,7 +2017,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	shouldClearCandidateIDs := false
 	if _, hasCandidates := rawFields["runtime_candidate_ids"]; hasCandidates {
 		if isManager {
-			if req.RuntimeCandidateIDs == nil {
+			if req.RuntimeCandidateIDs == nil || len(*req.RuntimeCandidateIDs) == 0 {
 				shouldClearCandidateIDs = true
 			} else {
 				var candidateUUIDs []pgtype.UUID

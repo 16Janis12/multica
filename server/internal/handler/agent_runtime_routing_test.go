@@ -250,4 +250,16 @@ func TestUpdateAgent_AllowMemberCandidatesWorkflow(t *testing.T) {
 	if len(cands) != 1 || cands[0] != ownerRuntimeID {
 		t.Fatalf("expected owner candidate to remain in pool, got %v", cands)
 	}
+
+	// 7. Owner removes all candidates by sending an empty candidate list []string{}
+	removeOwnerReq := withURLParam(newRequestAs(ownerID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"runtime_candidate_ids": []string{}}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, removeOwnerReq).Want(http.StatusOK)
+
+	// Verify that candidate pool is now cleared
+	var clearedCands []string
+	dbfx.QueryRow(t, "SELECT runtime_candidate_ids::text[] FROM agent WHERE id = $1", agentID).Scan(&clearedCands)
+	if len(clearedCands) != 0 {
+		t.Fatalf("expected candidate pool to be cleared, got %v", clearedCands)
+	}
 }
