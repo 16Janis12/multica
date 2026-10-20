@@ -1717,7 +1717,7 @@ UPDATE agent
 SET runtime_id = NULL, updated_at = now()
 WHERE runtime_id = $1
   AND owner_id IS DISTINCT FROM $2
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, runtime_candidate_ids, routing_strategy, read_only
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, runtime_candidate_ids, routing_strategy, read_only, allow_member_candidates
 `
 
 type UnbindNonOwnerAgentsFromRuntimeParams struct {
@@ -1770,6 +1770,7 @@ func (q *Queries) UnbindNonOwnerAgentsFromRuntime(ctx context.Context, arg Unbin
 			&i.RuntimeCandidateIds,
 			&i.RoutingStrategy,
 			&i.ReadOnly,
+			&i.AllowMemberCandidates,
 		); err != nil {
 			return nil, err
 		}
@@ -1807,7 +1808,7 @@ const unbindUserAgentsFromRuntime = `-- name: UnbindUserAgentsFromRuntime :many
 UPDATE agent
 SET runtime_id = NULL, updated_at = now()
 WHERE runtime_id = $1 AND kind = 'user'
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, runtime_candidate_ids, routing_strategy, read_only
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, runtime_candidate_ids, routing_strategy, read_only, allow_member_candidates
 `
 
 // MUL-5559: the runtime-delete replacement for archive-then-hard-delete. Every
@@ -1862,6 +1863,7 @@ func (q *Queries) UnbindUserAgentsFromRuntime(ctx context.Context, runtimeID pgt
 			&i.RuntimeCandidateIds,
 			&i.RoutingStrategy,
 			&i.ReadOnly,
+			&i.AllowMemberCandidates,
 		); err != nil {
 			return nil, err
 		}

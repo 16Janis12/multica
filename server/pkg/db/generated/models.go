@@ -57,6 +57,7 @@ type Agent struct {
 	RuntimeCandidateIds   []pgtype.UUID `json:"runtime_candidate_ids"`
 	RoutingStrategy       string        `json:"routing_strategy"`
 	ReadOnly              bool          `json:"read_only"`
+	AllowMemberCandidates bool          `json:"allow_member_candidates"`
 }
 
 type AgentBuilderDraft struct {

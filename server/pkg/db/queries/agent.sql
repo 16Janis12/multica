@@ -59,7 +59,7 @@ INSERT INTO agent (
     instructions, custom_env, custom_args, mcp_config, model, thinking_level,
     service_tier, conversation_starters,
     composio_toolkit_allowlist, permission_mode,
-    runtime_candidate_ids, routing_strategy, read_only
+    runtime_candidate_ids, routing_strategy, read_only, allow_member_candidates
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
@@ -69,7 +69,8 @@ INSERT INTO agent (
     COALESCE(sqlc.narg('permission_mode'), 'private'),
     sqlc.narg('runtime_candidate_ids')::uuid[],
     COALESCE(sqlc.narg('routing_strategy'), 'capacity_headroom'),
-    COALESCE(sqlc.narg('read_only')::boolean, false)
+    COALESCE(sqlc.narg('read_only')::boolean, false),
+    COALESCE(sqlc.narg('allow_member_candidates')::boolean, false)
 )
 RETURNING *;
 
@@ -151,6 +152,7 @@ UPDATE agent SET
     runtime_candidate_ids = COALESCE(sqlc.narg('runtime_candidate_ids')::uuid[], runtime_candidate_ids),
     routing_strategy = COALESCE(sqlc.narg('routing_strategy'), routing_strategy),
     read_only = COALESCE(sqlc.narg('read_only')::boolean, read_only),
+    allow_member_candidates = COALESCE(sqlc.narg('allow_member_candidates')::boolean, allow_member_candidates),
     updated_at = now()
 WHERE id = $1
 RETURNING *;

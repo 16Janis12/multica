@@ -658,6 +658,8 @@ export interface Agent {
   /** Dynamic routing strategy: "capacity_headroom" (default) or "least_busy". */
   routing_strategy?: "capacity_headroom" | "least_busy" | string;
   read_only?: boolean;
+  /** Whether workspace members are allowed to contribute candidate runtimes to this pool. */
+  allow_member_candidates?: boolean;
 }
 
 export interface AgentConversationStarter {
@@ -737,6 +739,7 @@ export interface CreateAgentRequest {
   /** Dynamic routing strategy: "capacity_headroom" or "least_busy". */
   routing_strategy?: "capacity_headroom" | "least_busy" | string;
   read_only?: boolean;
+  allow_member_candidates?: boolean;
 }
 
 export interface AgentBuilderSession {
@@ -876,6 +879,7 @@ export interface UpdateAgentRequest {
    */
   service_tier?: string;
   read_only?: boolean;
+  allow_member_candidates?: boolean;
 }
 
 /**

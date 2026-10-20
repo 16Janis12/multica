@@ -24,6 +24,7 @@ interface RuntimeCandidatePoolPickerProps {
   members: MemberWithUser[];
   currentUserId: string | null;
   canEdit?: boolean;
+  isOwnerOrAdmin?: boolean;
   onChange: (candidateIds: string[]) => Promise<void> | void;
 }
 
@@ -31,8 +32,10 @@ export function RuntimeCandidatePoolPicker({
   candidateIds,
   defaultRuntimeId,
   runtimes,
+  members,
   currentUserId,
   canEdit = true,
+  isOwnerOrAdmin = true,
   onChange,
 }: RuntimeCandidatePoolPickerProps) {
   const [open, setOpen] = useState(false);
@@ -74,7 +77,12 @@ export function RuntimeCandidatePoolPicker({
     );
     const label = runtimeRowLabel(r, machine?.title ?? "");
     const title = machine?.title ?? "";
-    return label !== title && title ? `${label} · ${title}` : label;
+    const base = label !== title && title ? `${label} · ${title}` : label;
+    const ownerMember = members.find((m) => m.user_id === r.owner_id);
+    if (ownerMember && currentUserId && r.owner_id !== currentUserId) {
+      return `${base} (${ownerMember.name || ownerMember.email})`;
+    }
+    return base;
   };
 
   return (
@@ -119,7 +127,7 @@ export function RuntimeCandidatePoolPicker({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {canEdit && selectedRuntimes.length > 0 && (
+            {canEdit && isOwnerOrAdmin && selectedRuntimes.length > 0 && (
               <span
                 role="button"
                 tabIndex={0}

@@ -2,11 +2,13 @@ package handler
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/internal/testutil"
 	"github.com/multica-ai/multica/server/internal/util"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 func TestAgentToResponse_RuntimeCandidatePool(t *testing.T) {
@@ -139,5 +141,113 @@ func TestSanitizeTaskAgentModel(t *testing.T) {
 	m, tl, st = sanitizeTaskAgentModel("codex", "gemini-2.5-flash", "", "")
 	if m != "" {
 		t.Fatalf("expected incompatible gemini model cleared for codex, got %q", m)
+	}
+}
+
+func TestAgentToResponse_AllowMemberCandidates(t *testing.T) {
+	h := &Handler{}
+	agent := db.Agent{
+		ID:                    util.MustParseUUID("10000000-0000-0000-0000-000000000001"),
+		WorkspaceID:           util.MustParseUUID("20000000-0000-0000-0000-000000000001"),
+		Name:                  "Member Candidates Agent",
+		AllowMemberCandidates: true,
+		RuntimeConfig:         []byte("{}"),
+		CustomArgs:            []byte("[]"),
+		Status:                "idle",
+		PermissionMode:        "private",
+	}
+
+	resp := h.agentToResponse(agent)
+	if !resp.AllowMemberCandidates {
+		t.Fatalf("expected AllowMemberCandidates to be true")
+	}
+
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to marshal AgentResponse: %v", err)
+	}
+	var jsonMap map[string]any
+	if err := json.Unmarshal(encoded, &jsonMap); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if v, ok := jsonMap["allow_member_candidates"].(bool); !ok || !v {
+		t.Fatalf("expected allow_member_candidates=true in JSON, got %v", jsonMap["allow_member_candidates"])
+	}
+}
+
+func TestUpdateAgent_AllowMemberCandidatesWorkflow(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	ownerID := dbfx.User(t, "Pool Owner", "pool-owner@multica.test")
+	dbfx.Member(t, testWorkspaceID, ownerID, "member")
+
+	memberID := dbfx.User(t, "Pool Teammate", "pool-teammate@multica.test")
+	dbfx.Member(t, testWorkspaceID, memberID, "member")
+
+	outsiderID := dbfx.User(t, "Pool Outsider", "pool-outsider@multica.test")
+	dbfx.Member(t, testWorkspaceID, outsiderID, "member")
+
+	ownerRuntimeID := dbfx.Runtime(t, "Owner Runtime", testutil.Cols{
+		"owner_id":   ownerID,
+		"visibility": "private",
+	})
+	memberRuntimeID := dbfx.Runtime(t, "Member Runtime", testutil.Cols{
+		"owner_id":   memberID,
+		"visibility": "private",
+	})
+	outsiderRuntimeID := dbfx.Runtime(t, "Outsider Runtime", testutil.Cols{
+		"owner_id":   outsiderID,
+		"visibility": "private",
+	})
+
+	agentID := dbfx.Agent(t, "member-pool-test-agent", ownerRuntimeID, testutil.Cols{
+		"owner_id":                ownerID,
+		"runtime_candidate_ids":    []string{ownerRuntimeID},
+		"allow_member_candidates": false,
+	})
+
+	// 1. When allow_member_candidates is false, teammate cannot update runtime_candidate_ids
+	req := withURLParam(newRequestAs(memberID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"runtime_candidate_ids": []string{ownerRuntimeID, memberRuntimeID}}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, req).Want(http.StatusForbidden)
+
+	// 2. Owner toggles allow_member_candidates = true
+	toggleReq := withURLParam(newRequestAs(ownerID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"allow_member_candidates": true}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, toggleReq).Want(http.StatusOK)
+
+	// 3. Teammate cannot update other fields (e.g. name) even if allow_member_candidates is true
+	nameReq := withURLParam(newRequestAs(memberID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"name": "Hacked Name"}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, nameReq).Want(http.StatusForbidden)
+
+	// 4. Teammate cannot add outsider's private runtime
+	tryOutsiderReq := withURLParam(newRequestAs(memberID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"runtime_candidate_ids": []string{outsiderRuntimeID}}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, tryOutsiderReq).Want(http.StatusForbidden)
+
+	// 5. Teammate successfully adds their own private runtime
+	addMemberReq := withURLParam(newRequestAs(memberID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"runtime_candidate_ids": []string{memberRuntimeID}}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, addMemberReq).Want(http.StatusOK)
+
+	// Verify in DB that ownerRuntimeID is preserved and memberRuntimeID is added
+	var cands []string
+	dbfx.QueryRow(t, "SELECT runtime_candidate_ids::text[] FROM agent WHERE id = $1", agentID).Scan(&cands)
+	if len(cands) != 2 {
+		t.Fatalf("expected 2 candidates in pool, got %v", cands)
+	}
+
+	// 6. Teammate removes their own runtime by sending an empty candidate list
+	removeMemberReq := withURLParam(newRequestAs(memberID, http.MethodPatch, "/api/agents/"+agentID,
+		map[string]any{"runtime_candidate_ids": []string{}}), "id", agentID)
+	testutil.Call(t, testHandler.UpdateAgent, removeMemberReq).Want(http.StatusOK)
+
+	// Verify that ownerRuntimeID is still preserved
+	dbfx.QueryRow(t, "SELECT runtime_candidate_ids::text[] FROM agent WHERE id = $1", agentID).Scan(&cands)
+	if len(cands) != 1 || cands[0] != ownerRuntimeID {
+		t.Fatalf("expected owner candidate to remain in pool, got %v", cands)
 	}
 }

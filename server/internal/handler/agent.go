@@ -143,6 +143,7 @@ type AgentResponse struct {
 	ArchivedAt                       *string                `json:"archived_at"`
 	ArchivedBy                       *string                `json:"archived_by"`
 	ReadOnly                         bool                   `json:"read_only"`
+	AllowMemberCandidates            bool                   `json:"allow_member_candidates"`
 }
 
 // runtimeConfigGatewayTokenMask is the placeholder the API substitutes for
@@ -258,6 +259,7 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 		ArchivedAt:               timestampToPtr(a.ArchivedAt),
 		ArchivedBy:               uuidToPtr(a.ArchivedBy),
 		ReadOnly:                 a.ReadOnly,
+		AllowMemberCandidates:    a.AllowMemberCandidates,
 	}
 }
 
@@ -1365,6 +1367,7 @@ type CreateAgentRequest struct {
 	RuntimeCandidateIDs *[]string `json:"runtime_candidate_ids"`
 	RoutingStrategy     *string   `json:"routing_strategy"`
 	ReadOnly            *bool     `json:"read_only"`
+	AllowMemberCandidates *bool   `json:"allow_member_candidates"`
 }
 
 func decodeJSONBodyWithRawFields(body io.Reader, dst any) (map[string]json.RawMessage, error) {
@@ -1662,6 +1665,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		RuntimeCandidateIds:      candidateUUIDs,
 		RoutingStrategy:          routingStrategy,
 		ReadOnly:                 pgtype.Bool{Bool: req.ReadOnly != nil && *req.ReadOnly, Valid: req.ReadOnly != nil},
+		AllowMemberCandidates:    pgtype.Bool{Bool: req.AllowMemberCandidates != nil && *req.AllowMemberCandidates, Valid: req.AllowMemberCandidates != nil},
 	})
 	if err != nil {
 		// Unique constraint on (workspace_id, name) — return a clear conflict error
@@ -1781,6 +1785,7 @@ type UpdateAgentRequest struct {
 	RuntimeCandidateIDs      *[]string `json:"runtime_candidate_ids"`
 	RoutingStrategy          *string   `json:"routing_strategy"`
 	ReadOnly                 *bool     `json:"read_only"`
+	AllowMemberCandidates    *bool     `json:"allow_member_candidates"`
 }
 
 // workspaceAlwaysRedactSecrets reports whether the workspace has opted
@@ -1937,18 +1942,25 @@ func redactAgentResponseForActor(resp *AgentResponse, actorType string) {
 	}
 }
 
-// canManageAgent checks whether the current user can update or archive an agent.
-// Only the agent owner or workspace owner/admin can manage any agent,
-// regardless of whether it is public or private.
-func (h *Handler) canManageAgent(w http.ResponseWriter, r *http.Request, agent db.Agent) bool {
+// checkAgentManagement checks whether the caller is a workspace member and whether
+// they have full management rights (workspace owner/admin or the agent owner).
+func (h *Handler) checkAgentManagement(w http.ResponseWriter, r *http.Request, agent db.Agent) (db.Member, bool, bool) {
 	wsID := uuidToString(agent.WorkspaceID)
 	member, ok := h.requireWorkspaceRole(w, r, wsID, "agent not found", "owner", "admin", "member")
 	if !ok {
-		return false
+		return db.Member{}, false, false
 	}
 	isAdmin := roleAllowed(member.Role, "owner", "admin")
 	isAgentOwner := uuidToString(agent.OwnerID) == requestUserID(r)
-	if !isAdmin && !isAgentOwner {
+	return member, isAdmin || isAgentOwner, true
+}
+
+func (h *Handler) canManageAgent(w http.ResponseWriter, r *http.Request, agent db.Agent) bool {
+	_, isManager, ok := h.checkAgentManagement(w, r, agent)
+	if !ok {
+		return false
+	}
+	if !isManager {
 		writeError(w, http.StatusForbidden, "only the agent owner can manage this agent")
 		return false
 	}
@@ -1961,7 +1973,8 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.canManageAgent(w, r, existing) {
+	member, isManager, ok := h.checkAgentManagement(w, r, existing)
+	if !ok {
 		return
 	}
 
@@ -1970,6 +1983,19 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+
+	if !isManager {
+		if !existing.AllowMemberCandidates {
+			writeError(w, http.StatusForbidden, "only the agent owner can manage this agent")
+			return
+		}
+		for f := range rawFields {
+			if f != "runtime_candidate_ids" {
+				writeError(w, http.StatusForbidden, "only the agent owner can manage this agent")
+				return
+			}
+		}
 	}
 
 	// Hard-reject any attempt to write custom_env through the generic
@@ -1990,18 +2016,87 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	shouldClearCandidateIDs := false
 	if _, hasCandidates := rawFields["runtime_candidate_ids"]; hasCandidates {
-		if req.RuntimeCandidateIDs == nil {
-			shouldClearCandidateIDs = true
-		} else {
-			var candidateUUIDs []pgtype.UUID
-			for _, cid := range *req.RuntimeCandidateIDs {
-				parsed, ok := parseUUIDOrBadRequest(w, cid, "runtime_candidate_ids")
-				if !ok {
-					return
+		if isManager {
+			if req.RuntimeCandidateIDs == nil {
+				shouldClearCandidateIDs = true
+			} else {
+				var candidateUUIDs []pgtype.UUID
+				for _, cid := range *req.RuntimeCandidateIDs {
+					parsed, ok := parseUUIDOrBadRequest(w, cid, "runtime_candidate_ids")
+					if !ok {
+						return
+					}
+					candidateUUIDs = append(candidateUUIDs, parsed)
 				}
-				candidateUUIDs = append(candidateUUIDs, parsed)
+				params.RuntimeCandidateIds = candidateUUIDs
 			}
-			params.RuntimeCandidateIds = candidateUUIDs
+		} else {
+			existingPoolRTs, err := h.Queries.GetAgentRuntimes(r.Context(), existing.RuntimeCandidateIds)
+			if err != nil {
+				slog.Warn("load existing agent runtimes failed", "error", err)
+			}
+			existingPoolMap := make(map[pgtype.UUID]db.AgentRuntime, len(existingPoolRTs))
+			for _, rt := range existingPoolRTs {
+				existingPoolMap[rt.ID] = rt
+			}
+
+			var requestedUUIDs []pgtype.UUID
+			requestedSet := make(map[pgtype.UUID]bool)
+			if req.RuntimeCandidateIDs != nil {
+				for _, cid := range *req.RuntimeCandidateIDs {
+					parsed, ok := parseUUIDOrBadRequest(w, cid, "runtime_candidate_ids")
+					if !ok {
+						return
+					}
+					requestedUUIDs = append(requestedUUIDs, parsed)
+					requestedSet[parsed] = true
+				}
+			}
+
+			for _, reqUUID := range requestedUUIDs {
+				if _, exists := existingPoolMap[reqUUID]; !exists {
+					rt, err := h.Queries.GetAgentRuntimeForWorkspace(r.Context(), db.GetAgentRuntimeForWorkspaceParams{
+						ID:          reqUUID,
+						WorkspaceID: existing.WorkspaceID,
+					})
+					if err != nil {
+						writeError(w, http.StatusBadRequest, "invalid runtime_candidate_id")
+						return
+					}
+					if !canUseRuntimeForAgent(member, rt) {
+						writeError(w, http.StatusForbidden, "cannot add runtime: runtime is not accessible to you")
+						return
+					}
+				}
+			}
+
+			var finalCandidateUUIDs []pgtype.UUID
+			for _, existingUUID := range existing.RuntimeCandidateIds {
+				rt, hasRT := existingPoolMap[existingUUID]
+				if hasRT && !canUseRuntimeForAgent(member, rt) {
+					finalCandidateUUIDs = append(finalCandidateUUIDs, existingUUID)
+				} else if requestedSet[existingUUID] {
+					finalCandidateUUIDs = append(finalCandidateUUIDs, existingUUID)
+				}
+			}
+			for _, reqUUID := range requestedUUIDs {
+				alreadyIn := false
+				for _, finalUUID := range finalCandidateUUIDs {
+					if finalUUID == reqUUID {
+						alreadyIn = true
+						break
+					}
+				}
+				if !alreadyIn {
+					finalCandidateUUIDs = append(finalCandidateUUIDs, reqUUID)
+				}
+			}
+
+			if len(finalCandidateUUIDs) == 0 {
+				shouldClearCandidateIDs = true
+			} else {
+				params.RuntimeCandidateIds = finalCandidateUUIDs
+			}
 		}
 	}
 	if req.RoutingStrategy != nil && *req.RoutingStrategy != "" {
@@ -2009,6 +2104,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ReadOnly != nil {
 		params.ReadOnly = pgtype.Bool{Bool: *req.ReadOnly, Valid: true}
+	}
+	if req.AllowMemberCandidates != nil && isManager {
+		params.AllowMemberCandidates = pgtype.Bool{Bool: *req.AllowMemberCandidates, Valid: true}
 	}
 	if req.Name != nil {
 		params.Name = pgtype.Text{String: *req.Name, Valid: true}

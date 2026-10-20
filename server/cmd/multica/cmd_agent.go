@@ -163,6 +163,7 @@ func init() {
 	agentCreateCmd.Flags().String("conversation-starters", "", "Conversation starters as a JSON array of {\"label\",\"prompt\"} objects (at most 3; label ≤80, prompt ≤4000). Shown above the Chat composer; selecting one fills the composer and does not start a run. Omit to default to none.")
 	agentCreateCmd.Flags().String("runtime-id", "", "Runtime ID (required)")
 	agentCreateCmd.Flags().StringSlice("candidate-runtimes", nil, "Candidate runtime IDs for dynamic quota/capacity pooling (repeatable or comma-separated)")
+	agentCreateCmd.Flags().Bool("allow-member-candidates", false, "Allow workspace members to contribute candidate runtimes to this agent's pool")
 	agentCreateCmd.Flags().String("routing-strategy", "capacity_headroom", "Dynamic routing strategy: capacity_headroom (default) or least_busy")
 	agentCreateCmd.Flags().String("runtime-config", "", "Runtime config as JSON string")
 	agentCreateCmd.Flags().String("model", "", "Model identifier (e.g. claude-sonnet-4-6, openai/gpt-4o). Prefer this over passing --model in --custom-args.")
@@ -189,6 +190,7 @@ func init() {
 	agentUpdateCmd.Flags().String("conversation-starters", "", "New conversation starters as a JSON array of {\"label\",\"prompt\"} objects (at most 3; label ≤80, prompt ≤4000). Pass '[]' to clear. Omit to leave the stored value unchanged.")
 	agentUpdateCmd.Flags().String("runtime-id", "", "New runtime ID")
 	agentUpdateCmd.Flags().StringSlice("candidate-runtimes", nil, "Candidate runtime IDs for dynamic quota/capacity pooling (repeatable or comma-separated; pass empty or null to clear)")
+	agentUpdateCmd.Flags().Bool("allow-member-candidates", false, "Allow workspace members to contribute candidate runtimes to this agent's pool")
 	agentUpdateCmd.Flags().String("routing-strategy", "", "Dynamic routing strategy: capacity_headroom or least_busy")
 	agentUpdateCmd.Flags().String("runtime-config", "", "New runtime config as JSON string")
 	agentUpdateCmd.Flags().String("model", "", "New model identifier. Pass an empty string to clear and fall back to the runtime default.")
@@ -716,6 +718,10 @@ func runAgentCreate(cmd *cobra.Command, _ []string) error {
 		v, _ := cmd.Flags().GetString("routing-strategy")
 		body["routing_strategy"] = v
 	}
+	if cmd.Flags().Changed("allow-member-candidates") {
+		v, _ := cmd.Flags().GetBool("allow-member-candidates")
+		body["allow_member_candidates"] = v
+	}
 	applyAgentPermissionFlags(cmd, body)
 	if cmd.Flags().Changed("max-concurrent-tasks") {
 		v, _ := cmd.Flags().GetInt32("max-concurrent-tasks")
@@ -814,6 +820,10 @@ func runAgentUpdate(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("routing-strategy") {
 		v, _ := cmd.Flags().GetString("routing-strategy")
 		body["routing_strategy"] = v
+	}
+	if cmd.Flags().Changed("allow-member-candidates") {
+		v, _ := cmd.Flags().GetBool("allow-member-candidates")
+		body["allow_member_candidates"] = v
 	}
 	if cmd.Flags().Changed("candidate-runtimes") {
 		v, _ := cmd.Flags().GetStringSlice("candidate-runtimes")

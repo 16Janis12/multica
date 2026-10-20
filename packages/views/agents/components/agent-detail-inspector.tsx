@@ -161,6 +161,8 @@ export function AgentDetailInspector({
     [agent.service_tier, agent.thinking_level, modelCatalog, runtime?.provider, update],
   );
 
+  const canEditPool = canEdit || (Boolean(agent.allow_member_candidates) && Boolean(currentUserId));
+
   const hasCrossProviderCandidates = useMemo(() => {
     const candidateIds = agent.runtime_candidate_ids;
     if (!candidateIds || candidateIds.length === 0 || !runtime) {
@@ -293,7 +295,8 @@ export function AgentDetailInspector({
                 runtimes={runtimes}
                 members={members}
                 currentUserId={currentUserId}
-                canEdit={canEdit}
+                canEdit={canEditPool}
+                isOwnerOrAdmin={canEdit}
                 onChange={(ids) => update({ runtime_candidate_ids: ids })}
               />
               {hasCrossProviderCandidates && (
@@ -301,6 +304,34 @@ export function AgentDetailInspector({
                   Cross-provider runtimes will fall back to their native default model if the selected model is incompatible.
                 </p>
               )}
+              {!canEdit && canEditPool && (
+                <p className="text-xs text-muted-foreground">
+                  You can contribute your own runtimes to this candidate pool.
+                </p>
+              )}
+            </div>
+          </SettingsRow>
+          <SettingsRow
+            label="Allow Member Runtimes"
+            size="select-wide"
+          >
+            <div className="flex items-center justify-between py-1">
+              <div className="space-y-0.5">
+                <span className="text-caption text-foreground">
+                  Allow teammates to add runtimes
+                </span>
+                <p className="text-micro text-muted-foreground">
+                  Permit other workspace members to contribute their own runtimes to this pool.
+                </p>
+              </div>
+              <Switch
+                aria-label="Allow teammates to add runtimes"
+                checked={agent.allow_member_candidates ?? false}
+                onCheckedChange={(checked) =>
+                  update({ allow_member_candidates: checked })
+                }
+                disabled={!canEdit}
+              />
             </div>
           </SettingsRow>
           {(agent.runtime_candidate_ids && agent.runtime_candidate_ids.length > 0) && (
