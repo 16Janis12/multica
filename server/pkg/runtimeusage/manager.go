@@ -82,6 +82,11 @@ func (m *Manager) GetSnapshot(ctx context.Context, provider, model string) *Runt
 		return nil
 	}
 
+	// Canonicalize provider aliases
+	if provider == "gemini" {
+		provider = "antigravity"
+	}
+
 	key := fmt.Sprintf("%s:%s", provider, model)
 
 	// 1. Fast cache read
