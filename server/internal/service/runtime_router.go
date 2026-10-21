@@ -162,9 +162,40 @@ func (s *TaskService) resolveOptimalRuntimeWithProvider(
 		return pgtype.UUID{}, fmt.Errorf("failed to load candidate runtimes for agent: %w", err)
 	}
 
-	// 1. Fetch active task counts for candidates.
+	// Filter out runtimes that are not accessible to the agent
+	// (e.g. private runtimes where the runtime owner has no access to the agent).
+	var accessibleRuntimes []db.AgentRuntime
+	for _, rt := range runtimes {
+		canUse, err := CanAgentUseRuntime(ctx, s.Queries, rt, agent)
+		if err == nil && canUse {
+			accessibleRuntimes = append(accessibleRuntimes, rt)
+		} else {
+			slog.Debug("skipping candidate runtime: not accessible to agent",
+				"agent_id", util.UUIDToString(agent.ID),
+				"runtime_id", util.UUIDToString(rt.ID),
+				"runtime_name", rt.Name,
+			)
+		}
+	}
+
+	if len(accessibleRuntimes) == 0 {
+		if agent.RuntimeID.Valid {
+			if pinnedRT, err := s.Queries.GetAgentRuntime(ctx, agent.RuntimeID); err == nil {
+				if canUsePinned, _ := CanAgentUseRuntime(ctx, s.Queries, pinnedRT, agent); canUsePinned {
+					return agent.RuntimeID, nil
+				}
+			}
+		}
+		return pgtype.UUID{}, fmt.Errorf("no accessible candidate runtimes found for agent")
+	}
+
+	// 1. Fetch active task counts for accessible candidates.
+	accessibleIDs := make([]pgtype.UUID, 0, len(accessibleRuntimes))
+	for _, rt := range accessibleRuntimes {
+		accessibleIDs = append(accessibleIDs, rt.ID)
+	}
 	activeCounts := make(map[string]int64)
-	counts, err := s.Queries.CountActiveTasksByRuntimes(ctx, agent.RuntimeCandidateIds)
+	counts, err := s.Queries.CountActiveTasksByRuntimes(ctx, accessibleIDs)
 	if err == nil {
 		for _, c := range counts {
 			if c.RuntimeID.Valid {
@@ -187,13 +218,13 @@ func (s *TaskService) resolveOptimalRuntimeWithProvider(
 
 	// 3. Build evaluations.
 	now := time.Now()
-	evals := make([]candidateEvaluation, 0, len(runtimes))
+	evals := make([]candidateEvaluation, 0, len(accessibleRuntimes))
 	model := ""
 	if agent.Model.Valid {
 		model = agent.Model.String
 	}
 
-	for _, rt := range runtimes {
+	for _, rt := range accessibleRuntimes {
 		rtIDStr := util.UUIDToString(rt.ID)
 		online := isCandidateOnline(rt, now)
 
@@ -228,9 +259,13 @@ func (s *TaskService) resolveOptimalRuntimeWithProvider(
 	RankCandidateRuntimes(evals, strategy)
 
 	best := evals[0]
-	// If even the top ranked candidate is offline, check if agent.RuntimeID is valid.
+	// If even the top ranked candidate is offline, check if agent.RuntimeID is valid and accessible.
 	if !best.isOnline && agent.RuntimeID.Valid {
-		return agent.RuntimeID, nil
+		if pinnedRT, err := s.Queries.GetAgentRuntime(ctx, agent.RuntimeID); err == nil {
+			if canUsePinned, _ := CanAgentUseRuntime(ctx, s.Queries, pinnedRT, agent); canUsePinned {
+				return agent.RuntimeID, nil
+			}
+		}
 	}
 
 	slog.Info("resolved optimal runtime for task dispatch",
@@ -246,6 +281,7 @@ func (s *TaskService) resolveOptimalRuntimeWithProvider(
 
 	return best.runtime.ID, nil
 }
+
 // resolveAgentTaskRuntime determines the target runtime for an agent run,
 // consulting the candidate pool router if dynamic routing is configured,
 // or falling back to the agent's pinned RuntimeID.
@@ -257,8 +293,11 @@ func (s *TaskService) resolveAgentTaskRuntime(ctx context.Context, agent db.Agen
 		}
 	}
 	if agent.RuntimeID.Valid {
-		return agent.RuntimeID, nil
+		if pinnedRT, err := s.Queries.GetAgentRuntime(ctx, agent.RuntimeID); err == nil {
+			if canUse, _ := CanAgentUseRuntime(ctx, s.Queries, pinnedRT, agent); canUse {
+				return agent.RuntimeID, nil
+			}
+		}
 	}
-	return pgtype.UUID{}, fmt.Errorf("agent has no runtime")
+	return pgtype.UUID{}, fmt.Errorf("agent has no available runtime")
 }
-

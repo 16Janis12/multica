@@ -158,7 +158,7 @@ func AgentReadiness(ctx context.Context, lookup RuntimeLookup, agent db.Agent) (
 		}
 		var fallbackVerdict AgentVerdict
 		for _, rt := range byID {
-			v := runtimeVerdict(rt, agent)
+			v := runtimeVerdictWithContext(ctx, lookup.Queries, rt, agent)
 			if v.Availability == AgentAvailable {
 				return v, nil
 			}
@@ -170,17 +170,39 @@ func AgentReadiness(ctx context.Context, lookup RuntimeLookup, agent db.Agent) (
 	if err != nil {
 		return AgentVerdict{}, err
 	}
-	return runtimeVerdict(rt, agent), nil
+	return runtimeVerdictWithContext(ctx, lookup.Queries, rt, agent), nil
 }
 
 // runtimeVerdict combines runtime health with the ownership binding that
 // determines whether this agent can execute there.
 func runtimeVerdict(rt db.AgentRuntime, agent db.Agent) AgentVerdict {
-	if rt.Visibility == "private" && rt.OwnerID.Valid && (!agent.OwnerID.Valid || agent.OwnerID != rt.OwnerID) {
-		return AgentVerdict{
-			Availability: AgentBlocked,
-			Reason:       dispatch.ReasonRuntimeAccessDenied,
-			Detail:       "agent owner does not match private runtime owner",
+	return runtimeVerdictWithContext(context.Background(), nil, rt, agent)
+}
+
+func runtimeVerdictWithContext(ctx context.Context, q *db.Queries, rt db.AgentRuntime, agent db.Agent) AgentVerdict {
+	if q != nil {
+		canUse, err := CanAgentUseRuntime(ctx, q, rt, agent)
+		if err != nil || !canUse {
+			detail := "agent owner does not match private runtime owner"
+			if rt.Visibility == "private" && rt.OwnerID.Valid {
+				if hasAccess, _ := UserCanAccessAgent(ctx, q, rt.OwnerID, agent); !hasAccess {
+					detail = "runtime owner does not have access to this agent"
+				}
+			}
+			return AgentVerdict{
+				Availability: AgentBlocked,
+				Reason:       dispatch.ReasonRuntimeAccessDenied,
+				Detail:       detail,
+			}
+		}
+	} else {
+		canUse, _ := CanAgentUseRuntime(ctx, nil, rt, agent)
+		if !canUse {
+			return AgentVerdict{
+				Availability: AgentBlocked,
+				Reason:       dispatch.ReasonRuntimeAccessDenied,
+				Detail:       "agent owner does not match private runtime owner",
+			}
 		}
 	}
 	if rt.Status == "online" {

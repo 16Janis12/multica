@@ -759,7 +759,7 @@ WHERE id = (
           JOIN agent_runtime r ON r.id = atq.runtime_id
           WHERE a.id = atq.agent_id
             -- A task's persisted runtime is not authority after an agent rebind.
-            AND a.runtime_id = atq.runtime_id
+            AND (a.runtime_id = atq.runtime_id OR atq.runtime_id = ANY(a.runtime_candidate_ids))
             -- Queued private-runtime rows are claimable so the handler can
             -- settle an owner mismatch through the existing FailTask path
             -- before daemon delivery. Public runtimes remain shareable across
@@ -877,7 +877,7 @@ WHERE id = (
           FROM agent a
           JOIN agent_runtime r ON r.id = atq.runtime_id
           WHERE a.id = atq.agent_id
-            AND a.runtime_id = atq.runtime_id
+            AND (a.runtime_id = atq.runtime_id OR atq.runtime_id = ANY(a.runtime_candidate_ids))
             AND (
                 r.visibility = 'public'
                 OR (
@@ -886,6 +886,7 @@ WHERE id = (
                         r.owner_id IS NULL
                         OR a.owner_id IS NULL
                         OR r.owner_id = a.owner_id
+                        OR (atq.runtime_id = ANY(a.runtime_candidate_ids) AND a.allow_member_candidates = true)
                     )
                 )
             )
@@ -924,7 +925,7 @@ WHERE id IN (
           FROM agent a
           JOIN agent_runtime r ON r.id = atq.runtime_id
           WHERE a.id = atq.agent_id
-            AND a.runtime_id = atq.runtime_id
+            AND (a.runtime_id = atq.runtime_id OR atq.runtime_id = ANY(a.runtime_candidate_ids))
             AND (
                 r.visibility = 'public'
                 OR (
@@ -933,6 +934,7 @@ WHERE id IN (
                         r.owner_id IS NULL
                         OR a.owner_id IS NULL
                         OR r.owner_id = a.owner_id
+                        OR (atq.runtime_id = ANY(a.runtime_candidate_ids) AND a.allow_member_candidates = true)
                     )
                 )
             )
@@ -2144,7 +2146,7 @@ WHERE atq.runtime_id = $1
       FROM agent a
       JOIN agent_runtime r ON r.id = atq.runtime_id
       WHERE a.id = atq.agent_id
-        AND a.runtime_id = atq.runtime_id
+        AND (a.runtime_id = atq.runtime_id OR atq.runtime_id = ANY(a.runtime_candidate_ids))
         AND (
             r.visibility = 'public'
             OR r.visibility = 'private'
@@ -2265,7 +2267,7 @@ WHERE atq.runtime_id = ANY(@runtime_ids::uuid[])
       FROM agent a
       JOIN agent_runtime r ON r.id = atq.runtime_id
       WHERE a.id = atq.agent_id
-        AND a.runtime_id = atq.runtime_id
+        AND (a.runtime_id = atq.runtime_id OR atq.runtime_id = ANY(a.runtime_candidate_ids))
         AND (
             r.visibility = 'public'
             OR r.visibility = 'private'

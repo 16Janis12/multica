@@ -2392,8 +2392,13 @@ func (s *TaskService) SendDirectChatMessage(
 		if carrier.ArchivedAt.Valid {
 			return ErrChatTaskAgentArchived
 		}
-		if !carrier.RuntimeID.Valid {
+		if !carrier.RuntimeID.Valid && len(carrier.RuntimeCandidateIds) == 0 {
 			return ErrChatTaskAgentNoRuntime
+		}
+
+		targetRuntimeID, err := s.resolveAgentTaskRuntime(ctx, carrier, pgtype.UUID{})
+		if err != nil {
+			return fmt.Errorf("resolve direct chat runtime: %w", err)
 		}
 
 		// The database status of every newly-created task is "queued" until a
@@ -2411,7 +2416,7 @@ func (s *TaskService) SendDirectChatMessage(
 		task, err := qtx.CreateChatTask(ctx, db.CreateChatTaskParams{
 			ID:                   dbid.NewV7(),
 			AgentID:              session.AgentID,
-			RuntimeID:            carrier.RuntimeID,
+			RuntimeID:            targetRuntimeID,
 			Priority:             2, // medium priority for chat; matches EnqueueChatTask
 			ChatSessionID:        session.ID,
 			InitiatorUserID:      initiatorUserID,
