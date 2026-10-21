@@ -508,6 +508,25 @@ export function createZhDict(
     },
     entries: [
       {
+        version: "0.6.7",
+        date: "2026-10-21",
+        title: "Epic 与 Sprint 敏捷管理、燃尽图可视化、Antigravity 多模型配额探针及成员运行时调度",
+        changes: [],
+        features: [
+          "Epic 与 Sprint 敏捷规划：全面支持史诗（Epic）与迭代冲刺（Sprint），提供配套的 CLI 命令（`multica epic`、`multica sprint`）、API 接口及数据库模型。",
+          "Sprint 燃尽图可视化：新增交互式冲刺燃尽图卡片，实时跟踪计划线、实际进度及剩余工作量变化。",
+          "Epic 与 Sprint 视图及泳道：在表格、看板与列表视图中支持按史诗和冲刺进行过滤、分组与泳道展示，并配备高效的快速选择器。",
+          "Antigravity 多模型配额探针：支持桌面 User-Agent 获取 Gemini 及第三方模型配额池，支持 Keyring 凭据发现及独立的配额查询工具。",
+        ],
+        improvements: [
+          "优化候选运行时调度：直接对话任务与排队任务现可流畅通过已配置的候选运行时分发执行。",
+          "强化运行时权限控制：校验私有运行时访问权限，确保工作区成员的候选运行时安全领取任务。",
+        ],
+        fixes: [
+          "运行时池管理修复：修复允许从智能体候选池中清空最后一个候选运行时的问题。",
+        ],
+      },
+      {
         version: "0.6.6",
         date: "2026-10-20",
         title: "跨提供商候选故障转移、只读安全模式与成员运行时池",

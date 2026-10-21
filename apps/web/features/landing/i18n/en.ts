@@ -523,6 +523,25 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.6.7",
+        date: "2026-10-21",
+        title: "Epics and Sprints, burndown visualization, multi-model Antigravity quotas, and member runtime dispatch",
+        changes: [],
+        features: [
+          "Epics and Sprints agile planning: organize and track work with full support for epics and sprints, including dedicated CLI commands (`multica epic`, `multica sprint`), API handlers, and database models.",
+          "Sprint burndown visualization: interactive burndown chart card tracking ideal vs. actual progress and remaining story points throughout the sprint.",
+          "Epic and sprint views & swimlanes: filter, group, and view issues by epic and sprint across table, board, and list views with dedicated pickers.",
+          "Antigravity multi-model quota probing: inspect usage and quota buckets across Gemini and third-party models with keyring credential support and standalone quota inspection tooling.",
+        ],
+        improvements: [
+          "Seamless candidate runtime routing: direct chat tasks and queued workflows now route cleanly through configured candidate runtimes.",
+          "Runtime access control: validated private runtime permissions so member candidates can safely claim assigned tasks.",
+        ],
+        fixes: [
+          "Runtime pool management: allow clearing the last remaining candidate runtime from an agent candidate pool without errors.",
+        ],
+      },
+      {
         version: "0.6.6",
         date: "2026-10-20",
         title: "Cross-provider candidate fallback, read-only mode, and member runtime pools",
