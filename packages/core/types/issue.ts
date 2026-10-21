@@ -203,6 +203,8 @@ export interface Issue {
    */
   duplicate_of?: IssueDuplicateOf | null;
   project_id: string | null;
+  epic_id: string | null;
+  sprint_id: string | null;
   position: number;
   // Ordered barrier group among sibling sub-issues (null = unstaged). The
   // parent assignee is woken when a stage closes while a later one waits;
@@ -231,4 +233,47 @@ export interface Issue {
   last_activity_at?: string | null;
   /** Present only on issue detail responses for issues created from a comment. */
   source_context?: IssueSourceContext;
+}
+
+export interface Epic {
+  id: string;
+  workspace_id: string;
+  project_id: string | null;
+  identifier: string;
+  title: string;
+  description: string | null;
+  color: string | null;
+  status: "planned" | "in_progress" | "completed" | "cancelled";
+  lead_type: string | null;
+  lead_id: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+  total_count?: number;
+  done_count?: number;
+}
+
+export interface Sprint {
+  id: string;
+  workspace_id: string;
+  project_id: string | null;
+  name: string;
+  goal: string | null;
+  status: "planned" | "active" | "completed" | "cancelled";
+  start_date: string | null;
+  end_date: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  total_count?: number;
+  done_count?: number;
+}
+
+export interface SprintBurndownPoint {
+  date: string;
+  remaining: number;
+  ideal: number;
+  completed: number;
 }

@@ -13,6 +13,8 @@ export interface CreateIssueRequest {
   assignee_id?: string;
   parent_issue_id?: string;
   project_id?: string;
+  epic_id?: string | null;
+  sprint_id?: string | null;
   /** Ordered stage (>= 1) grouping this sub-issue under its parent. */
   stage?: number;
   start_date?: string;
@@ -70,6 +72,8 @@ export interface UpdateIssueRequest {
   due_date?: string | null;
   parent_issue_id?: string | null;
   project_id?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
   /** Ordered stage (>= 1); null clears it (unstaged). */
   stage?: number | null;
   /** Attachment IDs to bind to this issue alongside the description update.
@@ -124,7 +128,7 @@ export interface MoveIssueRequest
 }
 
 /** Inputs to `POST /api/issues/preview-trigger`. A nil prospective field means
- *  "leave unchanged"; `isCreate` previews a not-yet-persisted issue. */
+ *  \"leave unchanged\"; `isCreate` previews a not-yet-persisted issue. */
 export interface IssueTriggerPreviewParams {
   issueIds?: string[];
   isCreate?: boolean;
@@ -177,12 +181,18 @@ export interface ListIssuesParams {
   assignee_types?: IssueAssigneeType[];
   creator_id?: string;
   project_id?: string;
+  epic_id?: string;
+  sprint_id?: string;
   /** Actor-aware table facets. OR within each field. */
   assignee_filters?: IssueActorRef[];
   include_no_assignee?: boolean;
   creator_filters?: IssueActorRef[];
   project_ids?: string[];
   include_no_project?: boolean;
+  epic_ids?: string[];
+  include_no_epic?: boolean;
+  sprint_ids?: string[];
+  include_no_sprint?: boolean;
   label_ids?: string[];
   /** Restrict the window to root issues instead of filtering loaded pages. */
   top_level_only?: boolean;
@@ -250,6 +260,8 @@ export interface ListGroupedIssuesParams {
   assignee_ids?: string[];
   creator_id?: string;
   project_id?: string;
+  epic_id?: string;
+  sprint_id?: string;
   /** See `ListIssuesParams.involves_user_id` — same semantics. */
   involves_user_id?: string;
   /** JSONB containment filter on `issue.metadata`. AND across keys. */
@@ -263,6 +275,10 @@ export interface ListGroupedIssuesParams {
   creator_filters?: IssueActorRef[];
   project_ids?: string[];
   include_no_project?: boolean;
+  epic_ids?: string[];
+  include_no_epic?: boolean;
+  sprint_ids?: string[];
+  include_no_sprint?: boolean;
   label_ids?: string[];
   group_assignee_type?: IssueAssigneeType | "none";
   group_assignee_id?: string;
@@ -320,6 +336,10 @@ export interface IssueTableFilters {
   creators?: IssueActorRef[];
   project_ids?: string[];
   include_no_project?: boolean;
+  epic_ids?: string[];
+  include_no_epic?: boolean;
+  sprint_ids?: string[];
+  include_no_sprint?: boolean;
   /** Lifecycle status of the parent project. A separate dimension from
    *  `project_ids` (AND across the two); an issue with no project never
    *  matches. */
@@ -379,10 +399,12 @@ export type IssueTableGroupSpec =
   | { kind: "status_category"; category_format?: "lifecycle" }
   | { kind: "assignee" }
   | { kind: "project" }
+  | { kind: "epic" }
+  | { kind: "sprint" }
   | { kind: "parent" }
   | {
       kind: "compound";
-      primary: "assignee" | "project" | "parent";
+      primary: "assignee" | "project" | "parent" | "epic" | "sprint";
       /** `status_category` folds custom statuses into their category's cell. */
       secondary: "status" | "status_category";
       /** Omit for legacy seven-value category buckets; only for status_category. */
@@ -413,6 +435,8 @@ export type IssueTableGroupValue =
   | { kind: "status"; status: string }
   | { kind: "assignee"; actor: IssueTableActorRef | null }
   | { kind: "project"; project_id: string | null }
+  | { kind: "epic"; epic_id: string | null }
+  | { kind: "sprint"; sprint_id: string | null }
   | {
       kind: "parent";
       parent_id: string | null;
@@ -483,6 +507,8 @@ export type IssueTableFacetSpec =
   | { kind: "assignee" }
   | { kind: "creator" }
   | { kind: "project" }
+  | { kind: "epic" }
+  | { kind: "sprint" }
   | { kind: "label" }
   | { kind: "property"; property_id: string }
   /** Agents running issue work inside this surface. `key` is the agent id,
@@ -649,6 +675,59 @@ export interface CreatePersonalAccessTokenRequest {
 
 export interface CreatePersonalAccessTokenResponse extends PersonalAccessToken {
   token: string;
+}
+
+// Epic API
+export interface CreateEpicRequest {
+  title: string;
+  description?: string | null;
+  color?: string | null;
+  status?: "planned" | "in_progress" | "completed" | "cancelled";
+  project_id?: string | null;
+  lead_type?: string | null;
+  lead_id?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+}
+
+export interface UpdateEpicRequest {
+  title?: string;
+  description?: string | null;
+  color?: string | null;
+  status?: "planned" | "in_progress" | "completed" | "cancelled";
+  project_id?: string | null;
+  lead_type?: string | null;
+  lead_id?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+}
+
+export interface ListEpicsParams {
+  project_id?: string;
+  status?: string;
+}
+
+// Sprint API
+export interface CreateSprintRequest {
+  name: string;
+  goal?: string | null;
+  project_id?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface UpdateSprintRequest {
+  name?: string;
+  goal?: string | null;
+  project_id?: string | null;
+  status?: "planned" | "active" | "completed" | "cancelled";
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface ListSprintsParams {
+  project_id?: string;
+  status?: string;
 }
 
 // Pagination

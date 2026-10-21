@@ -2154,6 +2154,33 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Epics
+			r.Route("/api/epics", func(r chi.Router) {
+				r.Get("/", h.ListEpics)
+				r.Post("/", h.CreateEpic)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetEpic)
+					r.Put("/", h.UpdateEpic)
+					r.Delete("/", h.DeleteEpic)
+					r.Get("/stats", h.GetEpicStats)
+				})
+			})
+
+			// Sprints
+			r.Route("/api/sprints", func(r chi.Router) {
+				r.Get("/", h.ListSprints)
+				r.Post("/", h.CreateSprint)
+				r.Get("/active", h.GetActiveSprint)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetSprint)
+					r.Put("/", h.UpdateSprint)
+					r.Delete("/", h.DeleteSprint)
+					r.Post("/start", h.StartSprint)
+					r.Post("/complete", h.CompleteSprint)
+					r.Get("/burndown", h.GetSprintBurndown)
+				})
+			})
+
 			// Squads
 			r.Route("/api/squads", func(r chi.Router) {
 				r.Get("/", h.ListSquads)

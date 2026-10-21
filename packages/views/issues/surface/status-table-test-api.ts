@@ -139,7 +139,7 @@ function workingAgentFacetValues(
 
 function primaryDescriptor(
   issue: Issue,
-  primary: "assignee" | "project" | "parent",
+  primary: "assignee" | "project" | "parent" | "epic" | "sprint",
   issueById: ReadonlyMap<string, Issue>,
 ): Omit<IssueTableGroupDescriptor, "count" | "secondary_groups"> {
   if (primary === "assignee") {
@@ -158,6 +158,18 @@ function primaryDescriptor(
     return {
       key: issue.project_id ? `project:${issue.project_id}` : "project:none",
       value: { kind: "project", project_id: issue.project_id },
+    };
+  }
+  if (primary === "epic") {
+    return {
+      key: issue.epic_id ? `epic:${issue.epic_id}` : "epic:none",
+      value: { kind: "epic", epic_id: issue.epic_id },
+    };
+  }
+  if (primary === "sprint") {
+    return {
+      key: issue.sprint_id ? `sprint:${issue.sprint_id}` : "sprint:none",
+      value: { kind: "sprint", sprint_id: issue.sprint_id },
     };
   }
   const parent = issue.parent_issue_id

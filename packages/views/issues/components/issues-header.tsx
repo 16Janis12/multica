@@ -2,6 +2,7 @@
 
 import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bookmark,
   CalendarDays,
   ChartGantt,
   ChevronDown,
@@ -21,6 +22,7 @@ import {
   UserMinus,
   UserPen,
   Waves,
+  Zap,
 } from "lucide-react";
 import { Button } from "@multica/ui/components/ui/button";
 import { Spinner } from "@multica/ui/components/ui/spinner";
@@ -67,6 +69,8 @@ import { projectListOptions } from "@multica/core/projects/queries";
 import { PROJECT_STATUS_CONFIG, PROJECT_STATUS_ORDER } from "@multica/core/projects/config";
 import { labelListOptions } from "@multica/core/labels/queries";
 import { propertyListOptions } from "@multica/core/properties";
+import { epicListOptions } from "@multica/core/epics";
+import { sprintListOptions } from "@multica/core/sprints";
 import { propertyIdFromViewKey } from "@multica/core/issues/stores/view-store";
 import type {
   Issue,
@@ -144,6 +148,10 @@ function getActiveFilterCount(
     creatorFilters: ActorFilterValue[];
     projectFilters: string[];
     includeNoProject: boolean;
+    epicFilters?: string[];
+    includeNoEpic?: boolean;
+    sprintFilters?: string[];
+    includeNoSprint?: boolean;
     projectStatusFilters: ProjectStatus[];
     labelFilters: string[];
     propertyFilters?: Record<string, PropertyFilterValue[]>;
@@ -167,6 +175,14 @@ function getActiveFilterCount(
     delta(state.projectFilters, baseline?.project) > 0 ||
     (state.includeNoProject && !(baseline?.includeNoProject ?? false));
   if (projectDelta) count++;
+  const epicDelta =
+    delta(state.epicFilters ?? [], baseline?.epic) > 0 ||
+    ((state.includeNoEpic ?? false) && !(baseline?.includeNoEpic ?? false));
+  if (epicDelta) count++;
+  const sprintDelta =
+    delta(state.sprintFilters ?? [], baseline?.sprint) > 0 ||
+    ((state.includeNoSprint ?? false) && !(baseline?.includeNoSprint ?? false));
+  if (sprintDelta) count++;
   if (delta(state.projectStatusFilters, baseline?.projectStatus) > 0) count++;
   if (delta(state.labelFilters, baseline?.label) > 0) count++;
   for (const [id, selected] of Object.entries(state.propertyFilters ?? {})) {
@@ -209,12 +225,16 @@ function useIssueCounts(
     const assignee = new Map<string, number>();
     const creator = new Map<string, number>();
     const project = new Map<string, number>();
+    const epic = new Map<string, number>();
+    const sprint = new Map<string, number>();
     const label = new Map<string, number>();
     // property definition id → option key → count. Checkbox values count
     // under the "true"/"false" pseudo-option keys the filter store uses.
     const property = new Map<string, Map<string, number>>();
     let noAssignee = 0;
     let noProject = 0;
+    let noEpic = 0;
+    let noSprint = 0;
 
     if (serverFacets) {
       for (const facet of serverFacets.facets) {
@@ -229,6 +249,10 @@ function useIssueCounts(
                   ? creator
                   : facet.kind === "project"
                     ? project
+                    : facet.kind === "epic"
+                      ? epic
+                      : facet.kind === "sprint"
+                        ? sprint
                     : facet.kind === "label"
                       ? label
                       : null;
@@ -244,12 +268,16 @@ function useIssueCounts(
             noAssignee = value.count;
           } else if (facet.kind === "project" && value.key === "__none__") {
             noProject = value.count;
+          } else if (facet.kind === "epic" && value.key === "__none__") {
+            noEpic = value.count;
+          } else if (facet.kind === "sprint" && value.key === "__none__") {
+            noSprint = value.count;
           } else {
             target?.set(value.key, value.count);
           }
         }
       }
-      return { status, priority, assignee, creator, noAssignee, project, noProject, label, property };
+      return { status, priority, assignee, creator, noAssignee, project, noProject, epic, noEpic, sprint, noSprint, label, property };
     }
 
     for (const issue of allIssues) {
@@ -270,6 +298,16 @@ function useIssueCounts(
         noProject++;
       } else {
         project.set(issue.project_id, (project.get(issue.project_id) ?? 0) + 1);
+      }
+      if (!issue.epic_id) {
+        noEpic++;
+      } else {
+        epic.set(issue.epic_id, (epic.get(issue.epic_id) ?? 0) + 1);
+      }
+      if (!issue.sprint_id) {
+        noSprint++;
+      } else {
+        sprint.set(issue.sprint_id, (sprint.get(issue.sprint_id) ?? 0) + 1);
       }
 
       if (issue.labels) {
@@ -299,7 +337,7 @@ function useIssueCounts(
       }
     }
 
-    return { status, priority, assignee, creator, noAssignee, project, noProject, label, property };
+    return { status, priority, assignee, creator, noAssignee, project, noProject, epic, noEpic, sprint, noSprint, label, property };
   }, [allIssues, serverFacets]);
 }
 
@@ -493,6 +531,280 @@ function ActorSubContent({
 }
 
 // Project sub-menu content
+
+
+// Epic sub-menu content
+
+function EpicSubContent({
+  counts,
+  selected,
+  onToggle,
+  includeNoEpic,
+  onToggleNoEpic,
+  noEpicCount,
+  fixedIds,
+  noEpicFixed = false,
+  fixedTitle,
+}: {
+  counts: Map<string, number>;
+  selected: string[];
+  onToggle: (epicId: string) => void;
+  includeNoEpic: boolean;
+  onToggleNoEpic: () => void;
+  noEpicCount: number;
+  fixedIds?: Set<string>;
+  noEpicFixed?: boolean;
+  fixedTitle?: string;
+}) {
+  const [search, setSearch] = useState("");
+  const wsId = useWorkspaceId();
+  const { data: epics = [] } = useQuery(epicListOptions(wsId));
+  const query = search.trim().toLowerCase();
+  const filtered = epics.filter(
+    (e) =>
+      e.title.toLowerCase().includes(query) ||
+      (e.identifier && e.identifier.toLowerCase().includes(query)),
+  );
+
+  return (
+    <>
+      <div className="px-2 py-1.5 border-b border-foreground/5">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search epics…"
+          aria-label="Filter epics"
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full bg-transparent text-body placeholder:text-muted-foreground rounded-sm px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          autoFocus
+        />
+      </div>
+
+      <div className="max-h-64 overflow-y-auto p-1">
+        {(!query || "no epic".includes(query)) && (
+          <DropdownMenuCheckboxItem
+            checked={includeNoEpic}
+            disabled={noEpicFixed}
+            title={noEpicFixed ? fixedTitle : undefined}
+            onCheckedChange={() => onToggleNoEpic()}
+            className={FILTER_ITEM_CLASS}
+          >
+            <HoverCheck checked={includeNoEpic} />
+            <Bookmark className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <span>No epic</span>
+            {noEpicCount > 0 && (
+              <span className="ml-auto text-caption text-muted-foreground font-mono tabular-nums">
+                {noEpicCount}
+              </span>
+            )}
+          </DropdownMenuCheckboxItem>
+        )}
+
+        {filtered.map((epic) => {
+          const checked = selected.includes(epic.id);
+          const count = counts.get(epic.id) ?? 0;
+          return (
+            <DropdownMenuCheckboxItem
+              key={epic.id}
+              checked={checked}
+              disabled={fixedIds?.has(epic.id) === true}
+              title={fixedIds?.has(epic.id) === true ? fixedTitle : undefined}
+              onCheckedChange={() => onToggle(epic.id)}
+              className={FILTER_ITEM_CLASS}
+            >
+              <HoverCheck checked={checked} />
+              <span
+                className="size-2 rounded-full shrink-0"
+                style={{ backgroundColor: epic.color || "#8b5cf6" }}
+                aria-hidden="true"
+              />
+              <span className="truncate text-pretty">{epic.title}</span>
+              {epic.identifier && (
+                <span
+                  translate="no"
+                  className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0 uppercase ml-1"
+                >
+                  {epic.identifier}
+                </span>
+              )}
+              {count > 0 && (
+                <span className="ml-auto text-caption text-muted-foreground font-mono tabular-nums">
+                  {count}
+                </span>
+              )}
+            </DropdownMenuCheckboxItem>
+          );
+        })}
+
+        {filtered.length === 0 && search && (
+          <div className="px-2 py-3 text-center text-body text-muted-foreground">
+            No epics found
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+export function SprintSelector({
+  projectId,
+  className,
+}: {
+  projectId?: string;
+  className?: string;
+}) {
+  const wsId = useWorkspaceId();
+  const [open, setOpen] = useState(false);
+  const sprintFilters = useViewStore((s) => s.sprintFilters);
+  const includeNoSprint = useViewStore((s) => s.includeNoSprint);
+  const toggleSprintFilter = useViewStore((s) => s.toggleSprintFilter);
+  const toggleNoSprint = useViewStore((s) => s.toggleNoSprint);
+  const clearFilterDimension = useViewStore((s) => s.clearFilterDimension);
+
+  const { data: sprints = [] } = useQuery(
+    sprintListOptions(wsId, projectId ? { project_id: projectId } : undefined),
+  );
+
+  const activeSprints = useMemo(() => sprints.filter((s) => s.status === "active"), [sprints]);
+  const upcomingSprints = useMemo(() => sprints.filter((s) => s.status === "planned"), [sprints]);
+
+  const selectedLabel = useMemo(() => {
+    if (includeNoSprint) return "Backlog";
+    if (sprintFilters.length === 0) return "All Sprints";
+    if (sprintFilters.length === 1) {
+      const match = sprints.find((s) => s.id === sprintFilters[0]);
+      return match ? match.name : "1 Sprint";
+    }
+    return `${sprintFilters.length} Sprints`;
+  }, [includeNoSprint, sprintFilters, sprints]);
+
+  const selectAll = () => {
+    clearFilterDimension("sprint");
+    setOpen(false);
+  };
+
+  const selectBacklog = () => {
+    if (!includeNoSprint) {
+      if (sprintFilters.length > 0) clearFilterDimension("sprint");
+      toggleNoSprint();
+    }
+    setOpen(false);
+  };
+
+  const selectSprint = (id: string) => {
+    if (includeNoSprint) toggleNoSprint();
+    toggleSprintFilter(id);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        role="combobox"
+        aria-label="Select sprint"
+        aria-expanded={open}
+        className={`inline-flex items-center justify-between gap-1.5 rounded-md border border-input bg-background/80 px-2.5 py-1.5 text-xs font-medium min-h-[44px] hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors shrink-0 ${className ?? ""}`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Zap className="size-3.5 shrink-0 text-emerald-500 fill-emerald-500" aria-hidden="true" />
+          <span className="truncate max-w-[130px] font-mono tabular-nums">{selectedLabel}</span>
+        </div>
+        <ChevronDown className="size-3 shrink-0 opacity-50" aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1">
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={selectAll}
+            className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+              sprintFilters.length === 0 && !includeNoSprint ? "bg-accent/60 font-semibold" : ""
+            }`}
+          >
+            <span>All Sprints</span>
+          </button>
+
+          {activeSprints.length > 0 && (
+            <div className="pt-1 border-t border-border/50">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Active Sprint
+              </div>
+              {activeSprints.map((s) => {
+                const isSelected = sprintFilters.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => selectSprint(s.id)}
+                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+                      isSelected ? "bg-accent/60 font-semibold text-emerald-600 dark:text-emerald-400" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Zap className="size-3 text-emerald-500 fill-emerald-500 shrink-0" aria-hidden="true" />
+                      <span className="truncate text-pretty">{s.name}</span>
+                    </div>
+                    {s.end_date && (
+                      <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0 ml-1">
+                        Ends {s.end_date.slice(5)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {upcomingSprints.length > 0 && (
+            <div className="pt-1 border-t border-border/50">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Upcoming
+              </div>
+              {upcomingSprints.map((s) => {
+                const isSelected = sprintFilters.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => selectSprint(s.id)}
+                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+                      isSelected ? "bg-accent/60 font-semibold" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate text-pretty">{s.name}</span>
+                    </div>
+                    {s.start_date && (
+                      <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0 ml-1">
+                        {s.start_date.slice(5)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="pt-1 border-t border-border/50">
+            <button
+              type="button"
+              onClick={selectBacklog}
+              className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+                includeNoSprint ? "bg-accent/60 font-semibold" : ""
+              }`}
+            >
+              <span>Backlog</span>
+              <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
+                No sprint
+              </span>
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function ProjectSubContent({
   counts,
@@ -1357,6 +1669,7 @@ export function IssuesHeader({
         </DropdownMenu>
 
         <div className="flex shrink-0 items-center gap-1">
+          <SprintSelector />
           {agentRunningFilter && (
             <span className="mr-1 hidden text-caption text-muted-foreground md:inline">
               {t(($) => $.agent_activity.filter_active_label)}
@@ -1465,6 +1778,10 @@ export function IssueFilterMenu({
   const creatorFilters = useViewStore((s) => s.creatorFilters);
   const projectFilters = useViewStore((s) => s.projectFilters);
   const includeNoProject = useViewStore((s) => s.includeNoProject);
+  const epicFilters = useViewStore((s) => s.epicFilters);
+  const includeNoEpic = useViewStore((s) => s.includeNoEpic);
+  const sprintFilters = useViewStore((s) => s.sprintFilters);
+  const includeNoSprint = useViewStore((s) => s.includeNoSprint);
   const projectStatusFilters = useViewStore((s) => s.projectStatusFilters);
   const labelFilters = useViewStore((s) => s.labelFilters);
   const propertyFilters = useViewStore((s) => s.propertyFilters);
@@ -1500,6 +1817,10 @@ export function IssueFilterMenu({
         creatorFilters,
         projectFilters,
         includeNoProject,
+        epicFilters,
+        includeNoEpic,
+        sprintFilters,
+        includeNoSprint,
         projectStatusFilters,
         labelFilters,
         dateFilter: showDateFilter ? dateFilter : null,
@@ -1751,6 +2072,37 @@ export function IssueFilterMenu({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
 
+
+            {/* Epic */}
+            <DropdownMenuSub
+              onOpenChange={(open) =>
+                onTableFacetChange?.(open ? { kind: "epic" } : null)
+              }
+            >
+              <DropdownMenuSubTrigger>
+                <Bookmark className="size-3.5" />
+                <span className="flex-1">Epic</span>
+                {(epicFilters.length > 0 || includeNoEpic) && (
+                  <span className="text-caption text-primary font-medium font-mono tabular-nums">
+                    {epicFilters.length + (includeNoEpic ? 1 : 0)}
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-auto min-w-52 p-0">
+                <EpicSubContent
+                  counts={counts.epic}
+                  selected={epicFilters}
+                  onToggle={act.toggleEpicFilter}
+                  includeNoEpic={includeNoEpic}
+                  onToggleNoEpic={act.toggleNoEpic}
+                  noEpicCount={counts.noEpic}
+                  fixedIds={viewBaseline?.epic}
+                  noEpicFixed={viewBaseline?.includeNoEpic === true}
+                  fixedTitle={fixedTitle}
+                />
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
             {/* Project status — a dimension of its own next to Project:
                 "everything in the projects that are in progress", without
                 naming them one by one. */}
@@ -1993,15 +2345,19 @@ export function IssueDisplayControls({
     updated_at: "sort_updated",
     title: "sort_title",
   };
-  const GROUPING_LABEL_KEY: Record<typeof GROUPING_OPTIONS[number]["value"], "group_status" | "group_assignee" | "group_project"> = {
+  const GROUPING_LABEL_KEY: Record<typeof GROUPING_OPTIONS[number]["value"], "group_status" | "group_assignee" | "group_project" | "group_epic" | "group_sprint"> = {
     status: "group_status",
     assignee: "group_assignee",
     project: "group_project",
+    epic: "group_epic",
+    sprint: "group_sprint",
   };
-  const SWIMLANE_GROUPING_LABEL_KEY: Record<SwimlaneGrouping, "group_parent" | "group_project" | "group_assignee"> = {
+  const SWIMLANE_GROUPING_LABEL_KEY: Record<SwimlaneGrouping, "group_parent" | "group_project" | "group_assignee" | "group_epic" | "group_sprint"> = {
     parent: "group_parent",
     project: "group_project",
     assignee: "group_assignee",
+    epic: "group_epic",
+    sprint: "group_sprint",
   };
   const CARD_PROPERTY_LABEL_KEY: Record<typeof CARD_PROPERTY_OPTIONS[number]["key"], "card_priority" | "card_description" | "card_assignee" | "card_start_date" | "card_due_date" | "card_project" | "card_labels" | "card_child_progress"> = {
     priority: "card_priority",

@@ -136,6 +136,8 @@ function makeIssue(id: string, projectId: string | null): Issue {
     creator_type: "member",
     creator_id: "member-1",
     parent_issue_id: null,
+    epic_id: null,
+    sprint_id: null,
     project_id: projectId,
     position: 1,
     stage: null,

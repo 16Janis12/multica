@@ -299,6 +299,10 @@ const mockViewState = {
   creatorFilters: [] as { type: string; id: string }[],
   projectFilters: [] as string[],
   includeNoProject: false,
+  epicFilters: [] as string[],
+  includeNoEpic: false,
+  sprintFilters: [] as string[],
+  includeNoSprint: false,
   projectStatusFilters: [] as string[],
   labelFilters: [] as string[],
   propertyFilters: {} as Record<string, string[]>,
@@ -526,6 +530,8 @@ vi.mock("react-virtuoso", () => ({
 
 const issueDefaults = {
   parent_issue_id: null,
+  epic_id: null,
+  sprint_id: null,
   project_id: null,
   position: 0,
   stage: null,

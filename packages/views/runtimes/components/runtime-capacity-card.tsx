@@ -188,7 +188,7 @@ export function RuntimeCapacityCard({ runtime }: { runtime: AgentRuntime }) {
           </div>
         ) : !isSupported ? (
           <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-muted-foreground">
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/70" />
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-faint-foreground" />
             <div className="text-caption">
               <p className="font-medium text-foreground">
                 Live Quota Engine Ready

@@ -114,6 +114,10 @@ export function useIssueSurfaceData({
   creatorFilters,
   projectFilters,
   includeNoProject,
+  epicFilters,
+  includeNoEpic,
+  sprintFilters,
+  includeNoSprint,
   projectStatusFilters,
   labelFilters,
   propertyFilters,
@@ -144,6 +148,10 @@ export function useIssueSurfaceData({
   creatorFilters: IssueFilterState["creatorFilters"];
   projectFilters: string[];
   includeNoProject: boolean;
+  epicFilters?: string[];
+  includeNoEpic?: boolean;
+  sprintFilters?: string[];
+  includeNoSprint?: boolean;
   projectStatusFilters: ProjectStatus[];
   labelFilters: string[];
   propertyFilters: Record<string, PropertyFilterValue[]>;
@@ -227,6 +235,10 @@ export function useIssueSurfaceData({
       creatorFilters,
       projectFilters,
       includeNoProject,
+      epicFilters,
+      includeNoEpic,
+      sprintFilters,
+      includeNoSprint,
       projectStatusFilters,
       labelFilters,
       propertyFilters,
@@ -239,6 +251,10 @@ export function useIssueSurfaceData({
       creatorFilters,
       includeNoAssignee,
       includeNoProject,
+      epicFilters,
+      includeNoEpic,
+      sprintFilters,
+      includeNoSprint,
       labelFilters,
       priorityFilters,
       projectFilters,
@@ -403,6 +419,10 @@ export function useIssueSurfaceData({
       creatorFilters,
       projectFilters,
       includeNoProject,
+      epicFilters,
+      includeNoEpic,
+      sprintFilters,
+      includeNoSprint,
       projectStatusFilters,
       projectStatusById,
       labelFilters,
@@ -419,6 +439,10 @@ export function useIssueSurfaceData({
       propertyFilters,
       priorityFilters,
       projectFilters,
+      epicFilters,
+      includeNoEpic,
+      sprintFilters,
+      includeNoSprint,
       projectStatusById,
       projectStatusFilters,
       showSubIssues,

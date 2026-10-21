@@ -25,6 +25,8 @@ function mk(id: string, status: Issue["status"], position: number): Issue {
     creator_id: "user-1",
     parent_issue_id: null,
     project_id: null,
+    epic_id: null,
+    sprint_id: null,
     position,
     stage: null,
     start_date: null,

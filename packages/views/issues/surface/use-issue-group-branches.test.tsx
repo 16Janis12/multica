@@ -30,6 +30,8 @@ function makeIssue(id: string, status: Issue["status"]): Issue {
     creator_type: "member",
     creator_id: "user-1",
     parent_issue_id: "parent-1",
+    epic_id: null,
+    sprint_id: null,
     project_id: null,
     position: id === "child-1" ? 1 : 2,
     stage: null,

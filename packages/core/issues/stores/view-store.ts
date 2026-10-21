@@ -21,8 +21,10 @@ export type IssueGrouping =
   | "status"
   | "assignee"
   | "project"
+  | "epic"
+  | "sprint"
   | `property:${string}`;
-export type SwimlaneGrouping = "parent" | "project" | "assignee";
+export type SwimlaneGrouping = "parent" | "project" | "assignee" | "epic" | "sprint";
 /**
  * Sort key. `property:<definitionId>` is resolved server-side against the
  * active property catalog; stale or unsupported definitions degrade to
@@ -49,6 +51,8 @@ export type TableSystemColumnKey =
   | "assignee"
   | "labels"
   | "project"
+  | "epic"
+  | "sprint"
   | "start_date"
   | "due_date"
   | "created_at"
@@ -65,6 +69,8 @@ export type TableGrouping =
   | "status"
   | "assignee"
   | "project"
+  | "epic"
+  | "sprint"
   | `property:${string}`;
 export type TableCalculation = "none" | "sum" | "average" | "count";
 
@@ -76,6 +82,8 @@ export const TABLE_SYSTEM_COLUMNS: readonly TableSystemColumnKey[] = [
   "assignee",
   "labels",
   "project",
+  "epic",
+  "sprint",
   "start_date",
   "due_date",
   "created_at",
@@ -99,7 +107,7 @@ export interface IssueDateFilter {
   to: string;
 }
 
-export const SWIMLANE_GROUPINGS: SwimlaneGrouping[] = ["parent", "project", "assignee"];
+export const SWIMLANE_GROUPINGS: SwimlaneGrouping[] = ["parent", "project", "assignee", "epic", "sprint"];
 
 export interface CardProperties {
   priority: boolean;
@@ -127,6 +135,10 @@ export interface FilterSnapshot {
   creatorFilters: ActorFilterValue[];
   projectFilters: string[];
   includeNoProject: boolean;
+  epicFilters: string[];
+  includeNoEpic: boolean;
+  sprintFilters: string[];
+  includeNoSprint: boolean;
   projectStatusFilters: ProjectStatus[];
   labelFilters: string[];
   propertyFilters: Record<string, PropertyFilterValue[]>;
@@ -140,6 +152,8 @@ export type FilterDimension =
   | "assignee"
   | "creator"
   | "project"
+  | "epic"
+  | "sprint"
   | "projectStatus"
   | "label"
   | `property:${string}`;
@@ -168,6 +182,8 @@ export const GROUPING_OPTIONS: { value: StaticIssueGrouping; label: string }[] =
   { value: "status", label: "Status" },
   { value: "assignee", label: "Assignee" },
   { value: "project", label: "Project" },
+  { value: "epic", label: "Epic" },
+  { value: "sprint", label: "Sprint" },
 ];
 
 export const CARD_PROPERTY_OPTIONS: { key: keyof CardProperties; label: string }[] = [
@@ -246,6 +262,10 @@ export interface IssueViewState {
   creatorFilters: ActorFilterValue[];
   projectFilters: string[];
   includeNoProject: boolean;
+  epicFilters: string[];
+  includeNoEpic: boolean;
+  sprintFilters: string[];
+  includeNoSprint: boolean;
   /**
    * Lifecycle status of the parent project. Its own dimension next to
    * `projectFilters` (AND across the two, OR within): "show me everything in
@@ -322,6 +342,10 @@ export interface IssueViewState {
   toggleCreatorFilter: (value: ActorFilterValue) => void;
   toggleProjectFilter: (projectId: string) => void;
   toggleNoProject: () => void;
+  toggleEpicFilter: (epicId: string) => void;
+  toggleNoEpic: () => void;
+  toggleSprintFilter: (sprintId: string) => void;
+  toggleNoSprint: () => void;
   toggleProjectStatusFilter: (status: ProjectStatus) => void;
   toggleLabelFilter: (labelId: string) => void;
   togglePropertyFilter: (propertyId: string, optionId: string) => void;
@@ -371,6 +395,10 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   creatorFilters: [],
   projectFilters: [],
   includeNoProject: false,
+  epicFilters: [],
+  includeNoEpic: false,
+  sprintFilters: [],
+  includeNoSprint: false,
   projectStatusFilters: [],
   labelFilters: [],
   propertyFilters: {},
@@ -387,8 +415,8 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   ganttZoom: "week",
   ganttShowCompleted: false,
   swimlaneGrouping: "assignee",
-  swimlaneOrders: { parent: [], project: [], assignee: [] },
-  collapsedSwimlanes: { parent: [], project: [], assignee: [] },
+  swimlaneOrders: { parent: [], project: [], assignee: [], epic: [], sprint: [] },
+  collapsedSwimlanes: { parent: [], project: [], assignee: [], epic: [], sprint: [] },
   tableColumns: DEFAULT_TABLE_COLUMNS.map((column) => ({ ...column })),
   tableGrouping: "none",
   tableCollapsedGroups: [],
@@ -465,6 +493,22 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
     })),
   toggleNoProject: () =>
     set((state) => ({ includeNoProject: !state.includeNoProject })),
+  toggleEpicFilter: (epicId) =>
+    set((state) => ({
+      epicFilters: state.epicFilters.includes(epicId)
+        ? state.epicFilters.filter((id) => id !== epicId)
+        : [...state.epicFilters, epicId],
+    })),
+  toggleNoEpic: () =>
+    set((state) => ({ includeNoEpic: !state.includeNoEpic })),
+  toggleSprintFilter: (sprintId) =>
+    set((state) => ({
+      sprintFilters: state.sprintFilters.includes(sprintId)
+        ? state.sprintFilters.filter((id) => id !== sprintId)
+        : [...state.sprintFilters, sprintId],
+    })),
+  toggleNoSprint: () =>
+    set((state) => ({ includeNoSprint: !state.includeNoSprint })),
   toggleProjectStatusFilter: (status) =>
     set((state) => ({
       projectStatusFilters: state.projectStatusFilters.includes(status)
@@ -517,6 +561,10 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
       creatorFilters: [],
       projectFilters: [],
       includeNoProject: false,
+      epicFilters: [],
+      includeNoEpic: false,
+      sprintFilters: [],
+      includeNoSprint: false,
       projectStatusFilters: [],
       labelFilters: [],
       propertyFilters: {},
@@ -537,6 +585,10 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
           return { creatorFilters: [] };
         case "project":
           return { projectFilters: [], includeNoProject: false };
+        case "epic":
+          return { epicFilters: [], includeNoEpic: false };
+        case "sprint":
+          return { sprintFilters: [], includeNoSprint: false };
         case "projectStatus":
           return { projectStatusFilters: [] };
         case "label":
@@ -674,6 +726,10 @@ export const viewStorePersistOptions = (name: string) => ({
     creatorFilters: state.creatorFilters,
     projectFilters: state.projectFilters,
     includeNoProject: state.includeNoProject,
+    epicFilters: state.epicFilters,
+    includeNoEpic: state.includeNoEpic,
+    sprintFilters: state.sprintFilters,
+    includeNoSprint: state.includeNoSprint,
     projectStatusFilters: state.projectStatusFilters,
     labelFilters: state.labelFilters,
     propertyFilters: state.propertyFilters,
@@ -793,6 +849,10 @@ export function mergeViewStatePersisted<T extends IssueViewState>(
     // represented: the backend rejects it with a 400 and the filter chip
     // resolves its dot through PROJECT_STATUS_CONFIG. Drop it, like
     // `baselineFromQuery` does on the read side.
+    epicFilters: Array.isArray(p.epicFilters) ? p.epicFilters : current.epicFilters,
+    includeNoEpic: typeof p.includeNoEpic === "boolean" ? p.includeNoEpic : current.includeNoEpic,
+    sprintFilters: Array.isArray(p.sprintFilters) ? p.sprintFilters : current.sprintFilters,
+    includeNoSprint: typeof p.includeNoSprint === "boolean" ? p.includeNoSprint : current.includeNoSprint,
     projectStatusFilters: Array.isArray(p.projectStatusFilters)
       ? p.projectStatusFilters.filter((status): status is ProjectStatus =>
           (PROJECT_STATUS_ORDER as readonly string[]).includes(status as string),

@@ -228,6 +228,10 @@ export function useIssueSurfaceController({
   const creatorFilters = useViewStore((s) => s.creatorFilters);
   const projectFilters = useViewStore((s) => s.projectFilters);
   const includeNoProject = useViewStore((s) => s.includeNoProject);
+  const epicFilters = useViewStore((s) => s.epicFilters ?? []);
+  const includeNoEpic = useViewStore((s) => s.includeNoEpic ?? false);
+  const sprintFilters = useViewStore((s) => s.sprintFilters ?? []);
+  const includeNoSprint = useViewStore((s) => s.includeNoSprint ?? false);
   const projectStatusFilters = useViewStore((s) => s.projectStatusFilters);
   const labelFilters = useViewStore((s) => s.labelFilters);
   const propertyFilters = useViewStore((s) => s.propertyFilters);
@@ -409,6 +413,10 @@ export function useIssueSurfaceController({
     creatorFilters.length > 0 ||
     viewProjectFilters.length > 0 ||
     viewIncludeNoProject ||
+    epicFilters.length > 0 ||
+    includeNoEpic ||
+    sprintFilters.length > 0 ||
+    includeNoSprint ||
     projectStatusFilters.length > 0 ||
     labelFilters.length > 0 ||
     Object.keys(effectivePropertyFilters).length > 0 ||
@@ -498,6 +506,10 @@ export function useIssueSurfaceController({
           ? { project_ids: viewProjectFilters }
           : {}),
         ...(viewIncludeNoProject ? { include_no_project: true } : {}),
+        ...(epicFilters.length > 0 ? { epic_ids: epicFilters } : {}),
+        ...(includeNoEpic ? { include_no_epic: true } : {}),
+        ...(sprintFilters.length > 0 ? { sprint_ids: sprintFilters } : {}),
+        ...(includeNoSprint ? { include_no_sprint: true } : {}),
         ...(projectStatusFilters.length > 0
           ? { project_statuses: projectStatusFilters }
           : {}),
@@ -526,6 +538,10 @@ export function useIssueSurfaceController({
     dateParams,
     debouncedActiveSearch,
     effectivePropertyFilters,
+    epicFilters,
+    includeNoEpic,
+    sprintFilters,
+    includeNoSprint,
     includeNoAssignee,
     labelFilters,
     priorityFilters,
@@ -760,6 +776,10 @@ export function useIssueSurfaceController({
     creatorFilters,
     projectFilters: viewProjectFilters,
     includeNoProject: viewIncludeNoProject,
+    epicFilters,
+    includeNoEpic,
+    sprintFilters,
+    includeNoSprint,
     projectStatusFilters,
     labelFilters,
     propertyFilters: effectivePropertyFilters,

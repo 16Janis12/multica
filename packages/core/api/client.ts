@@ -106,6 +106,15 @@ import type {
   SendChatMessageResponse,
   StartMikaOnboardingResponse,
   CancelTaskResponse,
+  Epic,
+  Sprint,
+  SprintBurndownPoint,
+  CreateEpicRequest,
+  UpdateEpicRequest,
+  ListEpicsParams,
+  CreateSprintRequest,
+  UpdateSprintRequest,
+  ListSprintsParams,
   Project,
   CreateProjectRequest,
   UpdateProjectRequest,
@@ -4094,6 +4103,101 @@ export class ApiClient {
 
   async deleteProject(id: string): Promise<void> {
     await this.fetch(`/api/projects/${id}`, { method: "DELETE" });
+  }
+
+  // Epics
+  async listEpics(params?: ListEpicsParams): Promise<Epic[]> {
+    const search = new URLSearchParams();
+    if (params?.project_id) search.set("project_id", params.project_id);
+    if (params?.status) search.set("status", params.status);
+    const qs = search.toString();
+    const res = await this.fetch<Epic[] | { epics: Epic[] }>(`/api/epics${qs ? `?${qs}` : ""}`);
+    return Array.isArray(res) ? res : (res?.epics ?? []);
+  }
+
+  async getEpic(id: string): Promise<Epic> {
+    const res = await this.fetch<Epic | { epic: Epic }>(`/api/epics/${id}`);
+    return (res as { epic?: Epic }).epic ?? (res as Epic);
+  }
+
+  async createEpic(data: CreateEpicRequest): Promise<Epic> {
+    const res = await this.fetch<Epic | { epic: Epic }>("/api/epics", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return (res as { epic?: Epic }).epic ?? (res as Epic);
+  }
+
+  async updateEpic(id: string, data: UpdateEpicRequest): Promise<Epic> {
+    const res = await this.fetch<Epic | { epic: Epic }>(`/api/epics/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return (res as { epic?: Epic }).epic ?? (res as Epic);
+  }
+
+  async deleteEpic(id: string): Promise<void> {
+    await this.fetch(`/api/epics/${id}`, { method: "DELETE" });
+  }
+
+  // Sprints
+  async listSprints(params?: ListSprintsParams): Promise<Sprint[]> {
+    const search = new URLSearchParams();
+    if (params?.project_id) search.set("project_id", params.project_id);
+    if (params?.status) search.set("status", params.status);
+    const qs = search.toString();
+    const res = await this.fetch<Sprint[] | { sprints: Sprint[] }>(`/api/sprints${qs ? `?${qs}` : ""}`);
+    return Array.isArray(res) ? res : (res?.sprints ?? []);
+  }
+
+  async getActiveSprint(projectId?: string): Promise<Sprint | null> {
+    const search = new URLSearchParams();
+    if (projectId) search.set("project_id", projectId);
+    const qs = search.toString();
+    const res = await this.fetch<Sprint | { sprint: Sprint | null } | null>(`/api/sprints/active${qs ? `?${qs}` : ""}`);
+    if (!res) return null;
+    return (res as { sprint?: Sprint | null }).sprint !== undefined ? (res as { sprint: Sprint | null }).sprint : (res as Sprint);
+  }
+
+  async getSprint(id: string): Promise<Sprint> {
+    const res = await this.fetch<Sprint | { sprint: Sprint }>(`/api/sprints/${id}`);
+    return (res as { sprint?: Sprint }).sprint ?? (res as Sprint);
+  }
+
+  async getSprintBurndown(id: string): Promise<SprintBurndownPoint[]> {
+    const res = await this.fetch<SprintBurndownPoint[] | { burndown: SprintBurndownPoint[]; points?: SprintBurndownPoint[] }>(`/api/sprints/${id}/burndown`);
+    if (Array.isArray(res)) return res;
+    return res?.burndown ?? res?.points ?? [];
+  }
+
+  async createSprint(data: CreateSprintRequest): Promise<Sprint> {
+    const res = await this.fetch<Sprint | { sprint: Sprint }>("/api/sprints", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return (res as { sprint?: Sprint }).sprint ?? (res as Sprint);
+  }
+
+  async updateSprint(id: string, data: UpdateSprintRequest): Promise<Sprint> {
+    const res = await this.fetch<Sprint | { sprint: Sprint }>(`/api/sprints/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return (res as { sprint?: Sprint }).sprint ?? (res as Sprint);
+  }
+
+  async startSprint(id: string): Promise<Sprint> {
+    const res = await this.fetch<Sprint | { sprint: Sprint }>(`/api/sprints/${id}/start`, {
+      method: "POST",
+    });
+    return (res as { sprint?: Sprint }).sprint ?? (res as Sprint);
+  }
+
+  async completeSprint(id: string): Promise<Sprint> {
+    const res = await this.fetch<Sprint | { sprint: Sprint }>(`/api/sprints/${id}/complete`, {
+      method: "POST",
+    });
+    return (res as { sprint?: Sprint }).sprint ?? (res as Sprint);
   }
 
   // Project resources

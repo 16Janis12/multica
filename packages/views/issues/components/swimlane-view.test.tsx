@@ -251,6 +251,8 @@ const mockIssues: Issue[] = [
     creator_type: "member",
     creator_id: "user-1",
     parent_issue_id: null,
+    epic_id: null,
+    sprint_id: null,
     project_id: null,
     position: 100,
     stage: null,
@@ -275,6 +277,8 @@ const mockIssues: Issue[] = [
     creator_type: "member",
     creator_id: "user-1",
     parent_issue_id: "parent-1",
+    epic_id: null,
+    sprint_id: null,
     project_id: null,
     position: 200,
     stage: null,
@@ -299,6 +303,8 @@ const mockIssues: Issue[] = [
     creator_type: "member",
     creator_id: "user-1",
     parent_issue_id: null,
+    epic_id: null,
+    sprint_id: null,
     project_id: null,
     position: 300,
     stage: null,
@@ -416,6 +422,8 @@ describe("SwimLaneView", () => {
     creator_type: "member",
     creator_id: "user-1",
     parent_issue_id: null,
+    epic_id: null,
+    sprint_id: null,
     project_id: null,
     position: 400,
     stage: null,
@@ -566,6 +574,8 @@ describe("SwimLaneView", () => {
     creator_type: "member",
     creator_id: "user-1",
     parent_issue_id: "missing-parent",
+    epic_id: null,
+    sprint_id: null,
     project_id: null,
     position: 400,
     stage: null,
@@ -846,6 +856,8 @@ describe("SwimLaneView", () => {
       "orphan-1",
       {
         parent_issue_id: null,
+        epic_id: null,
+        sprint_id: null,
         status: "in_progress",
         position: 300,
         before_id: null,
@@ -895,6 +907,8 @@ describe("SwimLaneView", () => {
       "orphan-1",
       expect.objectContaining({
         parent_issue_id: "parent-1",
+        epic_id: null,
+        sprint_id: null,
       }),
       expect.any(Function),
     );
@@ -965,6 +979,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 100,
       stage: null,
@@ -989,6 +1005,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 200,
       stage: null,
@@ -1013,6 +1031,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: "parent-1",
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 300,
       stage: null,
@@ -1037,6 +1057,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: "parent-2",
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 400,
       stage: null,
@@ -1247,6 +1269,8 @@ describe("SwimLaneView", () => {
       title: "Issue A",
       project_id: "proj-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       status: "todo",
     },
     {
@@ -1256,6 +1280,8 @@ describe("SwimLaneView", () => {
       title: "Issue B",
       project_id: "proj-2",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       status: "in_progress",
     },
     {
@@ -1265,6 +1291,8 @@ describe("SwimLaneView", () => {
       title: "Issue C",
       project_id: null,
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       status: "todo",
     },
   ];
@@ -1347,6 +1375,8 @@ describe("SwimLaneView", () => {
       assignee_type: "member",
       assignee_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       status: "todo",
     },
@@ -1358,6 +1388,8 @@ describe("SwimLaneView", () => {
       assignee_type: "agent",
       assignee_id: "agent-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       status: "in_progress",
     },
@@ -1369,6 +1401,8 @@ describe("SwimLaneView", () => {
       assignee_type: null,
       assignee_id: null,
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       status: "todo",
     },
@@ -1495,6 +1529,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 10,
       stage: null,
@@ -1512,6 +1548,8 @@ describe("SwimLaneView", () => {
       identifier: "PROJ-11",
       title: "Parent",
       parent_issue_id: "gp-1",
+      epic_id: null,
+      sprint_id: null,
       position: 11,
     };
     const grandchild: Issue = {
@@ -1522,6 +1560,8 @@ describe("SwimLaneView", () => {
       title: "Grandchild (batch only)",
       status: "in_progress",
       parent_issue_id: "p-1",
+      epic_id: null,
+      sprint_id: null,
       position: 12,
     };
 
@@ -1570,6 +1610,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 50,
       stage: null,
@@ -1652,6 +1694,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 10,
       stage: null,
@@ -1669,6 +1713,8 @@ describe("SwimLaneView", () => {
       identifier: "PROJ-21",
       title: "Parent 2",
       parent_issue_id: "gp-2",
+      epic_id: null,
+      sprint_id: null,
       position: 11,
     };
     const matchingGrandchild: Issue = {
@@ -1680,6 +1726,8 @@ describe("SwimLaneView", () => {
       status: "in_progress",
       priority: "high",
       parent_issue_id: "p-2",
+      epic_id: null,
+      sprint_id: null,
       position: 12,
     };
     const nonMatchingGrandchild: Issue = {
@@ -1691,6 +1739,8 @@ describe("SwimLaneView", () => {
       status: "in_progress",
       priority: "low",
       parent_issue_id: "p-2",
+      epic_id: null,
+      sprint_id: null,
       position: 13,
     };
 
@@ -1746,6 +1796,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 10,
       stage: null,
@@ -1763,6 +1815,8 @@ describe("SwimLaneView", () => {
       identifier: "PROJ-31",
       title: "Parent 3",
       parent_issue_id: "gp-3",
+      epic_id: null,
+      sprint_id: null,
       position: 11,
     };
     const runningGrandchild: Issue = {
@@ -1775,6 +1829,8 @@ describe("SwimLaneView", () => {
       assignee_type: "agent",
       assignee_id: "idle-agent",
       parent_issue_id: "p-3",
+      epic_id: null,
+      sprint_id: null,
       position: 12,
     };
     const nonRunningGrandchild: Issue = {
@@ -1787,6 +1843,8 @@ describe("SwimLaneView", () => {
       assignee_type: "agent",
       assignee_id: "working-agent",
       parent_issue_id: "p-3",
+      epic_id: null,
+      sprint_id: null,
       position: 13,
     };
 
@@ -1836,6 +1894,8 @@ describe("SwimLaneView", () => {
       identifier: "PROJ-34",
       title: "Working Empty Child",
       parent_issue_id: parent.id,
+      epic_id: null,
+      sprint_id: null,
     };
     mockListChildrenByParents.mockResolvedValueOnce({
       issues: [batchOnlyChild],
@@ -1886,6 +1946,8 @@ describe("SwimLaneView", () => {
       creator_type: "member",
       creator_id: "user-1",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
       project_id: null,
       position: 10,
       stage: null,
@@ -1903,6 +1965,8 @@ describe("SwimLaneView", () => {
       identifier: "PROJ-41",
       title: "Parent 4",
       parent_issue_id: "gp-4",
+      epic_id: null,
+      sprint_id: null,
       position: 11,
     };
     // Returned only by the batch fetch (not in the initial `issues` set). It is
@@ -1915,6 +1979,8 @@ describe("SwimLaneView", () => {
       title: "Batch Sub-issue",
       status: "in_progress",
       parent_issue_id: "p-4",
+      epic_id: null,
+      sprint_id: null,
       position: 12,
     };
 

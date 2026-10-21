@@ -9,6 +9,7 @@ import type { Issue, IssueProperty, Project, UpdateIssueRequest } from "@multica
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { propertyListOptions } from "@multica/core/properties";
+import { epicListOptions } from "@multica/core/epics";
 import { CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
 import { descriptionPreview } from "./description-preview";
 import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
@@ -84,6 +85,9 @@ export const BoardCardContent = memo(function BoardCardContent({
     : null;
   const cardWsId = useWorkspaceId();
   const { data: workspaceProperties = [] } = useQuery(propertyListOptions(cardWsId));
+  const { data: epics = [] } = useQuery(epicListOptions(cardWsId));
+  const epic = issue.epic_id ? epics.find((e) => e.id === issue.epic_id) : null;
+  const showEpic = !!epic && cardGrouping !== "epic";
   // Custom properties toggled on in Display options, in toggle order, only
   // when this issue actually carries a value.
   const cardCustomProperties = cardPropertyIds
@@ -223,12 +227,25 @@ export const BoardCardContent = memo(function BoardCardContent({
         );
       })()}
 
-      {/* Chip row: status + project + labels + custom property values.
+      {/* Chip row: status + project + epic + labels + custom property values.
           The status chip renders only for a CUSTOM status — the column header
           already names the category. (MUL-6243) */}
-      {(showCustomStatus || showProject || showLabels || cardCustomProperties.length > 0) && (
+      {(showCustomStatus || showProject || showEpic || showLabels || cardCustomProperties.length > 0) && (
         <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
           <CustomStatusChip status={issue.status} />
+          {showEpic && (
+            <span
+              translate="no"
+              className="inline-flex max-w-[160px] min-w-0 items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-micro text-muted-foreground border border-border/40"
+            >
+              <span
+                className="size-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: epic.color || "#8b5cf6" }}
+                aria-hidden="true"
+              />
+              <span className="truncate text-pretty">{epic.title}</span>
+            </span>
+          )}
           {showProject && (
             <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-micro text-muted-foreground max-w-[160px]">
               <ProjectIcon project={project} size="sm" />

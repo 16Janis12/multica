@@ -506,7 +506,7 @@ var validIssueFields = []string{
 	"id", "workspace_id", "number", "identifier", "title", "description",
 	"status", "status_category", "status_name", "priority", "assignee_type",
 	"assignee_id", "creator_type", "creator_id", "parent_issue_id",
-	"duplicate_of", "project_id", "position", "stage", "start_date", "due_date", "created_at",
+	"duplicate_of", "project_id", "epic_id", "sprint_id", "position", "stage", "start_date", "due_date", "created_at",
 	"updated_at", "revision", "last_activity_at", "metadata", "properties",
 	"labels",
 }
@@ -600,6 +600,8 @@ func init() {
 	issueListCmd.Flags().String("assignee", "", "Filter by assignee name (member, agent, or squad; fuzzy match)")
 	issueListCmd.Flags().String("assignee-id", "", "Filter by assignee UUID — member, agent, or squad (mutually exclusive with --assignee)")
 	issueListCmd.Flags().String("project", "", "Filter by project ID")
+	issueListCmd.Flags().String("epic", "", "Filter by epic ID")
+	issueListCmd.Flags().String("sprint", "", "Filter by sprint ID")
 	issueListCmd.Flags().StringSlice("metadata", nil, "Filter by metadata key=value (repeatable; combined with AND). Value is JSON-parsed: 'true'/'false' → bool, numbers → number, otherwise string. Wrap as '\"42\"' to force a string when the value would otherwise sniff as a number.")
 	issueListCmd.Flags().StringArray("property", nil, `Filter by custom property, written as "Name=Value" (repeatable, one value per flag). Name is a property name (case-insensitive) or its UUID. Value depends on the type: an option name or id for select and multi_select, true or false for checkbox, a member name, email, or id for actor types, and the value itself for text, url, number, and date (YYYY-MM-DD). Use __none__ to match issues where the property is unset; it works for every type, so an option or member actually named __none__ has to be given by id, as does a property whose name contains "=" or ends in <, > or ! (the >=, <=, and != spellings are reserved for comparison filters). Repeating a property matches ANY of its values; different properties must ALL match.`)
 	issueListCmd.Flags().Int("limit", 50, fmt.Sprintf("Page size, 1 to %d (the server returns at most %d issues per request; use --offset to page through more)", issueListMaxPageSize, issueListMaxPageSize))
@@ -632,6 +634,8 @@ func init() {
 	issueCreateCmd.Flags().String("parent", "", "Parent issue ID")
 	issueCreateCmd.Flags().Int("stage", 0, "Stage ordinal (>=1) grouping this sub-issue into an ordered barrier group under its parent; omit for unstaged. The parent assignee is woken only when every sub-issue in a stage finishes.")
 	issueCreateCmd.Flags().String("project", "", "Project ID")
+	issueCreateCmd.Flags().String("epic", "", "Epic ID")
+	issueCreateCmd.Flags().String("sprint", "", "Sprint ID")
 	issueCreateCmd.Flags().String("start-date", "", "Start date (calendar day, YYYY-MM-DD)")
 	issueCreateCmd.Flags().String("due-date", "", "Due date (calendar day, YYYY-MM-DD)")
 	issueCreateCmd.Flags().Bool("allow-duplicate", false, "Allow creating an issue even when an active duplicate exists")
@@ -652,6 +656,8 @@ func init() {
 	issueUpdateCmd.Flags().String("assignee", "", "New assignee name (member, agent, or squad; fuzzy match)")
 	issueUpdateCmd.Flags().String("assignee-id", "", "New assignee UUID — member, agent, or squad (mutually exclusive with --assignee)")
 	issueUpdateCmd.Flags().String("project", "", "Project ID")
+	issueUpdateCmd.Flags().String("epic", "", "Epic ID (pass empty string to clear)")
+	issueUpdateCmd.Flags().String("sprint", "", "Sprint ID (pass empty string to clear)")
 	issueUpdateCmd.Flags().String("start-date", "", "New start date (calendar day, YYYY-MM-DD; pass empty string to clear)")
 	issueUpdateCmd.Flags().String("due-date", "", "New due date (calendar day, YYYY-MM-DD)")
 	issueUpdateCmd.Flags().String("parent", "", "Parent issue ID (use --parent \"\" to clear)")
@@ -803,6 +809,12 @@ func runIssueList(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		params.Set("project_id", project.ID)
+	}
+	if v, _ := cmd.Flags().GetString("epic"); v != "" {
+		params.Set("epic_id", v)
+	}
+	if v, _ := cmd.Flags().GetString("sprint"); v != "" {
+		params.Set("sprint_id", v)
 	}
 	if mdFlags, _ := cmd.Flags().GetStringSlice("metadata"); len(mdFlags) > 0 {
 		filter, err := buildMetadataFilterQueryParam(mdFlags)
@@ -1501,6 +1513,12 @@ func runIssueCreate(cmd *cobra.Command, _ []string) error {
 		}
 		body["project_id"] = project.ID
 	}
+	if v, _ := cmd.Flags().GetString("epic"); v != "" {
+		body["epic_id"] = v
+	}
+	if v, _ := cmd.Flags().GetString("sprint"); v != "" {
+		body["sprint_id"] = v
+	}
 	if cmd.Flags().Changed("stage") {
 		stage, _ := cmd.Flags().GetInt("stage")
 		if stage < 1 {
@@ -1729,6 +1747,22 @@ func runIssueUpdate(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("resolve project: %w", err)
 			}
 			body["project_id"] = project.ID
+		}
+	}
+	if cmd.Flags().Changed("epic") {
+		v, _ := cmd.Flags().GetString("epic")
+		if v == "" {
+			body["epic_id"] = nil
+		} else {
+			body["epic_id"] = v
+		}
+	}
+	if cmd.Flags().Changed("sprint") {
+		v, _ := cmd.Flags().GetString("sprint")
+		if v == "" {
+			body["sprint_id"] = nil
+		} else {
+			body["sprint_id"] = v
 		}
 	}
 	if cmd.Flags().Changed("start-date") {

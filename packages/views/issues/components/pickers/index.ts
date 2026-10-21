@@ -6,3 +6,5 @@ export { AssigneePicker, canAssignAgent } from "./assignee-picker";
 export { StartDatePicker } from "./start-date-picker";
 export { DueDatePicker } from "./due-date-picker";
 export { LabelPicker } from "./label-picker";
+export { EpicPicker } from "./epic-picker";
+export { SprintPicker } from "./sprint-picker";

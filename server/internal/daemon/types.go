@@ -114,6 +114,17 @@ type Task struct {
 	ProjectTitle                  string                 `json:"project_title,omitempty"`                    // human-readable project title for context injection
 	ProjectDescription            string                 `json:"project_description,omitempty"`              // durable project-level context injected into the brief
 	ProjectResources              []ProjectResourceData  `json:"project_resources,omitempty"`                // project-scoped resources to expose to the agent
+	SprintID                      string                 `json:"sprint_id,omitempty"`
+	SprintName                    string                 `json:"sprint_name,omitempty"`
+	SprintGoal                    string                 `json:"sprint_goal,omitempty"`
+	SprintStartDate               string                 `json:"sprint_start_date,omitempty"`
+	SprintEndDate                 string                 `json:"sprint_end_date,omitempty"`
+	SprintDaysRemaining           *int                   `json:"sprint_days_remaining,omitempty"`
+	EpicID                        string                 `json:"epic_id,omitempty"`
+	EpicTitle                     string                 `json:"epic_title,omitempty"`
+	EpicIdentifier                string                 `json:"epic_identifier,omitempty"`
+	EpicGoal                      string                 `json:"epic_goal,omitempty"`
+	EpicProgress                  *int                   `json:"epic_progress,omitempty"`
 	IsLeaderTask                  bool                   `json:"is_leader_task,omitempty"`                   // true when executing in the squad-leader coordinator role
 	LeaderRoleResolved            bool                   `json:"leader_role_resolved,omitempty"`             // server capability: IsLeaderTask/SquadID authoritatively answer "is this a leader run". Absent on servers predating it — those before #4951 never sent is_leader_task at all, later ones send it without this guarantee — so taskIsSquadLeader falls back to the briefing marker for both (MUL-5811)
 	PriorSessionID                string                 `json:"prior_session_id,omitempty"`                 // Claude session ID from a previous task on this issue

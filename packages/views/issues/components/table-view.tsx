@@ -1823,6 +1823,14 @@ export function TableView({
         }
         return value.parent?.title ?? t(($) => $.table.value_unavailable);
       }
+      if (value.kind === "epic") {
+        if (!value.epic_id) return "No epic";
+        return value.epic_id;
+      }
+      if (value.kind === "sprint") {
+        if (!value.sprint_id) return "No sprint";
+        return value.sprint_id;
+      }
       if (value.value_state === "unset") return t(($) => $.table.no_value);
       if (value.value_state === "unavailable") {
         return t(($) => $.table.value_unavailable);

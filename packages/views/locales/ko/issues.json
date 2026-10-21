@@ -234,7 +234,9 @@
     "card_project": "프로젝트",
     "card_labels": "라벨",
     "card_child_progress": "하위 태스크 진행률",
-    "show_sub_issues": "하위 태스크 표시"
+    "show_sub_issues": "하위 태스크 표시",
+    "group_epic": "에픽",
+    "group_sprint": "스프린트"
   },
   "view": {
     "tooltip_board": "보드 보기",

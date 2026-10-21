@@ -234,7 +234,9 @@
     "card_project": "项目",
     "card_labels": "标签",
     "card_child_progress": "子任务进度",
-    "show_sub_issues": "显示子任务"
+    "show_sub_issues": "显示子任务",
+    "group_epic": "史诗",
+    "group_sprint": "冲刺"
   },
   "view": {
     "tooltip_board": "看板视图",

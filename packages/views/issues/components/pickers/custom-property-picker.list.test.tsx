@@ -23,6 +23,8 @@ const issue: Issue = {
   title: "Related links", description: null, status: "todo", priority: "none",
   assignee_type: null, assignee_id: null, creator_type: "member", creator_id: "member-1",
   parent_issue_id: null, project_id: null, position: 1, stage: null,
+  epic_id: null,
+  sprint_id: null,
   start_date: null, due_date: null, labels: [], metadata: {},
   properties: { [property.id]: ["https://existing.example"] },
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",

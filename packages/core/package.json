@@ -168,7 +168,11 @@
     "./skills/frontmatter": "./skills/frontmatter.ts",
     "./skills/pack-archive": "./skills/pack-archive.ts",
     "./skills/stores": "./skills/stores/index.ts",
-    "./autopilots/stores": "./autopilots/stores/index.ts"
+    "./autopilots/stores": "./autopilots/stores/index.ts",
+    "./epics": "./epics/index.ts",
+    "./epics/*": "./epics/*.ts",
+    "./sprints": "./sprints/index.ts",
+    "./sprints/*": "./sprints/*.ts"
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "catalog:",

@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Bookmark,
   CircleCheck,
   Milestone,
   MoreHorizontal,
@@ -32,6 +33,7 @@ import {
   SlidersHorizontal,
   Tag,
   Unlink,
+  Zap,
   Users,
 } from "lucide-react";
 import { BreadcrumbHeader, type BreadcrumbSegment } from "../../layout/breadcrumb-header";
@@ -87,6 +89,8 @@ import { StartDatePicker } from "./pickers/start-date-picker";
 import { DueDatePicker } from "./pickers/due-date-picker";
 import { AssigneePicker } from "./pickers/assignee-picker";
 import { LabelPicker } from "./pickers/label-picker";
+import { EpicPicker } from "./pickers/epic-picker";
+import { SprintPicker } from "./pickers/sprint-picker";
 import { CustomPropertyValueEditor, CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
 import { Switch } from "@multica/ui/components/ui/switch";
 import { IssueActionsDropdown, useIssueActions, IssueActionsContextMenu, IssueContextMenuProvider } from "../actions";
@@ -505,7 +509,7 @@ const EMPTY_REPLIES: TimelineEntry[] = [];
 // its row and add-property entry are gated on `issue.parent_issue_id` at the
 // render site below — it stays in this list so seeding/visibility flow through
 // the same machinery as the other optional props.
-const OPTIONAL_PROP_KEYS = ["priority", "stage", "start_date", "due_date", "labels"] as const;
+const OPTIONAL_PROP_KEYS = ["priority", "epic", "sprint", "stage", "start_date", "due_date", "labels"] as const;
 type OptionalPropKey = (typeof OPTIONAL_PROP_KEYS)[number];
 
 function isOptionalPropSet(
@@ -516,6 +520,10 @@ function isOptionalPropSet(
   switch (key) {
     case "priority":
       return issue.priority !== "none";
+    case "epic":
+      return !!issue.epic_id;
+    case "sprint":
+      return !!issue.sprint_id;
     case "stage":
       return issue.stage !== null && issue.stage !== undefined;
     case "start_date":
@@ -2696,6 +2704,28 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               />
             </PropRow>
           )}
+          {visibleOptionalProps.has("epic") && (
+            <PropRow label="Epic">
+              <EpicPicker
+                epicId={issue.epic_id}
+                projectId={issue.project_id ?? undefined}
+                onUpdate={handleUpdateField}
+                align="start"
+                defaultOpen={autoOpenProp === "epic"}
+              />
+            </PropRow>
+          )}
+          {visibleOptionalProps.has("sprint") && (
+            <PropRow label="Sprint">
+              <SprintPicker
+                sprintId={issue.sprint_id}
+                projectId={issue.project_id ?? undefined}
+                onUpdate={handleUpdateField}
+                align="start"
+                defaultOpen={autoOpenProp === "sprint"}
+              />
+            </PropRow>
+          )}
           {issue.parent_issue_id != null && visibleOptionalProps.has("stage") && (
             <PropRow label={t(($) => $.detail.prop_stage)}>
               <StagePicker
@@ -2792,6 +2822,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                       {k === "priority" && (
                         <PriorityIcon priority="medium" inheritColor className="text-muted-foreground" />
                       )}
+                      {k === "epic" && (
+                        <Bookmark className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      {k === "sprint" && (
+                        <Zap className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
                       {k === "stage" && (
                         <Milestone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
@@ -2806,6 +2842,8 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                       )}
                       <span className="truncate">
                         {k === "priority" && t(($) => $.detail.prop_priority)}
+                        {k === "epic" && "Epic"}
+                        {k === "sprint" && "Sprint"}
                         {k === "stage" && t(($) => $.detail.prop_stage)}
                         {k === "start_date" && t(($) => $.detail.prop_start_date)}
                         {k === "due_date" && t(($) => $.detail.prop_due_date)}

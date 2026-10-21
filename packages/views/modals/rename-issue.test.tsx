@@ -72,6 +72,8 @@ const issue: Issue = {
   creator_type: "member",
   creator_id: "user-1",
   parent_issue_id: null,
+  epic_id: null,
+  sprint_id: null,
   project_id: null,
   position: 0,
   stage: null,

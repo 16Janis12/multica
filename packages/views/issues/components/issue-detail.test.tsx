@@ -574,6 +574,8 @@ const mockIssue: Issue = {
   creator_type: "member",
   creator_id: "user-1",
   parent_issue_id: null,
+  epic_id: null,
+  sprint_id: null,
   project_id: null,
   position: 0,
   stage: null,
@@ -798,6 +800,8 @@ describe("IssueDetail (shared)", () => {
     expect(mockOpenModal).toHaveBeenLastCalledWith("quick-create-issue", expect.objectContaining({
       anchor_comment_id: "source-root",
       parent_issue_id: "issue-1",
+      epic_id: null,
+      sprint_id: null,
     }));
 
     fireEvent.click(menuButton("source-reply")!);
@@ -805,6 +809,8 @@ describe("IssueDetail (shared)", () => {
     expect(mockOpenModal).toHaveBeenLastCalledWith("quick-create-issue", expect.objectContaining({
       anchor_comment_id: "source-reply",
       parent_issue_id: "issue-1",
+      epic_id: null,
+      sprint_id: null,
     }));
   });
 
@@ -939,6 +945,8 @@ describe("IssueDetail (shared)", () => {
     const cachedWithoutDetailOnlyContext: Issue = {
       ...mockIssue,
       parent_issue_id: "source-issue",
+      epic_id: null,
+      sprint_id: null,
     };
     const authoritativeDetail: Issue = {
       ...cachedWithoutDetailOnlyContext,
@@ -951,6 +959,8 @@ describe("IssueDetail (shared)", () => {
       number: 7,
       title: "Source issue",
       parent_issue_id: null,
+      epic_id: null,
+      sprint_id: null,
     };
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -2998,6 +3008,8 @@ describe("IssueDetail (shared)", () => {
     const subIssue = (overrides: Partial<Issue>): Issue => ({
       ...mockIssue,
       parent_issue_id: "issue-1",
+      epic_id: null,
+      sprint_id: null,
       assignee_type: null,
       assignee_id: null,
       due_date: null,
@@ -3591,6 +3603,8 @@ describe("groupSubIssuesByStage", () => {
     ...mockIssue,
     id,
     parent_issue_id: "parent-1",
+    epic_id: null,
+    sprint_id: null,
     stage,
   });
 

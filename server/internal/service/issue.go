@@ -72,6 +72,8 @@ type IssueCreateParams struct {
 	CreatorID     pgtype.UUID
 	ParentIssueID pgtype.UUID
 	ProjectID     pgtype.UUID
+	EpicID        pgtype.UUID
+	SprintID      pgtype.UUID
 	StartDate     pgtype.Date
 	DueDate       pgtype.Date
 	OriginType    pgtype.Text
@@ -157,6 +159,8 @@ var ErrParentIssueNotFound = errors.New("parent issue not found in this workspac
 // MCP / API key callers) enforces the same workspace boundary without
 // having to remember it. Callers translate this into 400.
 var ErrProjectNotFound = errors.New("project not found in this workspace")
+var ErrEpicNotFound = errors.New("epic not found in this workspace")
+var ErrSprintNotFound = errors.New("sprint not found in this workspace")
 
 // ErrIssueLabelNotFound signals that one of the supplied LabelIDs does not
 // exist in the issue's workspace or is not an issue-scoped label. The whole
@@ -334,6 +338,28 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		}
 	}
 
+	var epicID pgtype.UUID
+	if p.EpicID.Valid {
+		if _, err := qtx.GetEpicInWorkspace(ctx, db.GetEpicInWorkspaceParams{
+			ID:          p.EpicID,
+			WorkspaceID: p.WorkspaceID,
+		}); err != nil {
+			return IssueCreateResult{}, ErrEpicNotFound
+		}
+		epicID = p.EpicID
+	}
+
+	var sprintID pgtype.UUID
+	if p.SprintID.Valid {
+		if _, err := qtx.GetSprintInWorkspace(ctx, db.GetSprintInWorkspaceParams{
+			ID:          p.SprintID,
+			WorkspaceID: p.WorkspaceID,
+		}); err != nil {
+			return IssueCreateResult{}, ErrSprintNotFound
+		}
+		sprintID = p.SprintID
+	}
+
 	// Validate labels before we increment the issue counter so a stale or
 	// wrong-scope selection fails the create cheaply. The de-duplicated rows
 	// are attached to the issue below, inside this same transaction, and
@@ -395,6 +421,8 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 			OriginID:      p.OriginID,
 			Stage:         p.Stage,
 			Properties:    properties,
+			EpicID:        epicID,
+			SprintID:      sprintID,
 		})
 	} else {
 		issue, err = qtx.CreateIssue(ctx, db.CreateIssueParams{
@@ -416,6 +444,8 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 			ProjectID:     projectID,
 			Stage:         p.Stage,
 			Properties:    properties,
+			EpicID:        epicID,
+			SprintID:      sprintID,
 		})
 	}
 	if err != nil {

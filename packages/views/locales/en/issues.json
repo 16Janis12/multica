@@ -238,7 +238,9 @@
     "card_project": "Project",
     "card_labels": "Labels",
     "card_child_progress": "Sub-issue progress",
-    "show_sub_issues": "Show sub-issues"
+    "show_sub_issues": "Show sub-issues",
+    "group_epic": "Epic",
+    "group_sprint": "Sprint"
   },
   "view": {
     "tooltip_board": "Board view",

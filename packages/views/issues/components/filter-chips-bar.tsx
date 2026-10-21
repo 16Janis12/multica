@@ -5,6 +5,7 @@ import { useStatusLabel } from "../utils/status-label";
 import { NO_PROPERTY_VALUE } from "../utils/filter";
 import { useMemo, type ReactNode } from "react";
 import {
+  Bookmark,
   CalendarDays,
   CircleDashed,
   CircleDot,
@@ -14,6 +15,7 @@ import {
   User,
   UserPen,
   X,
+  Zap,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@multica/ui/components/ui/button";
@@ -23,6 +25,8 @@ import { projectListOptions } from "@multica/core/projects/queries";
 import { PROJECT_STATUS_CONFIG } from "@multica/core/projects/config";
 import { labelListOptions } from "@multica/core/labels/queries";
 import { propertyListOptions } from "@multica/core/properties";
+import { epicListOptions } from "@multica/core/epics";
+import { sprintListOptions } from "@multica/core/sprints";
 import { isActorPropertyType, isListPropertyType, isScalarPropertyType, parseActorRef, propertyFilterValueKey, PROPERTY_FILTER_OP_SYMBOLS, type PropertyFilterValue } from "@multica/core/types";
 import {
   type ActorFilterValue,
@@ -195,6 +199,10 @@ function useFilterChips(
   const creatorFilters = useViewStore((s) => s.creatorFilters);
   const projectFilters = useViewStore((s) => s.projectFilters);
   const includeNoProject = useViewStore((s) => s.includeNoProject);
+  const epicFilters = useViewStore((s) => s.epicFilters);
+  const includeNoEpic = useViewStore((s) => s.includeNoEpic);
+  const sprintFilters = useViewStore((s) => s.sprintFilters);
+  const includeNoSprint = useViewStore((s) => s.includeNoSprint);
   const projectStatusFilters = useViewStore((s) => s.projectStatusFilters);
   const labelFilters = useViewStore((s) => s.labelFilters);
   const propertyFilters = useViewStore((s) => s.propertyFilters);
@@ -208,6 +216,10 @@ function useFilterChips(
     creatorFilters.length > 0 ||
     projectFilters.length > 0 ||
     includeNoProject ||
+    epicFilters.length > 0 ||
+    includeNoEpic ||
+    sprintFilters.length > 0 ||
+    includeNoSprint ||
     projectStatusFilters.length > 0 ||
     labelFilters.length > 0 ||
     Object.values(propertyFilters).some((selected) => selected.length > 0);
@@ -247,6 +259,14 @@ function useFilterChips(
     ...labelListOptions(wsId),
     enabled: enabled && labelFilters.length > 0,
   });
+  const { data: epics = [] } = useQuery({
+    ...epicListOptions(wsId),
+    enabled: enabled && epicFilters.length > 0,
+  });
+  const { data: sprints = [] } = useQuery({
+    ...sprintListOptions(wsId),
+    enabled: enabled && sprintFilters.length > 0,
+  });
   const actorName = useMemo(
     () => buildChipActorNames(members, agents, squads),
     [members, agents, squads],
@@ -270,6 +290,10 @@ function useFilterChips(
       creatorFilters: s.creatorFilters,
       projectFilters: s.projectFilters,
       includeNoProject: s.includeNoProject,
+      epicFilters: s.epicFilters,
+      includeNoEpic: s.includeNoEpic,
+      sprintFilters: s.sprintFilters,
+      includeNoSprint: s.includeNoSprint,
       projectStatusFilters: s.projectStatusFilters,
       labelFilters: s.labelFilters,
       propertyFilters: s.propertyFilters,
@@ -296,6 +320,20 @@ function useFilterChips(
           ...current,
           projectFilters: raw.projectFilters,
           includeNoProject: raw.includeNoProject,
+        });
+        break;
+      case "epic":
+        s.resetFiltersTo({
+          ...current,
+          epicFilters: raw.epicFilters,
+          includeNoEpic: raw.includeNoEpic,
+        });
+        break;
+      case "sprint":
+        s.resetFiltersTo({
+          ...current,
+          sprintFilters: raw.sprintFilters,
+          includeNoSprint: raw.includeNoSprint,
         });
         break;
       case "projectStatus":
@@ -350,6 +388,18 @@ function useFilterChips(
   const deltaLabels = baseline
     ? labelFilters.filter((id) => !baseline.label.has(id))
     : labelFilters;
+  const deltaEpics = baseline
+    ? epicFilters.filter((id) => !baseline.epic.has(id))
+    : epicFilters;
+  const deltaNoEpic = baseline
+    ? includeNoEpic && !baseline.includeNoEpic
+    : includeNoEpic;
+  const deltaSprints = baseline
+    ? sprintFilters.filter((id) => !baseline.sprint.has(id))
+    : sprintFilters;
+  const deltaNoSprint = baseline
+    ? includeNoSprint && !baseline.includeNoSprint
+    : includeNoSprint;
   const deltaProperties: Record<string, PropertyFilterValue[]> = {};
   for (const [id, selected] of Object.entries(propertyFilters)) {
     const fixed = baseline?.property.get(id);
@@ -474,6 +524,34 @@ function useFilterChips(
         deltaProjectStatuses.map((status) => projectStatusLabels[status]),
       ),
       onRemove: () => clearDimension("projectStatus"),
+    });
+  }
+  if (deltaEpics.length > 0 || deltaNoEpic) {
+    const epicById = new Map(epics.map((e) => [e.id, e]));
+    const names = deltaEpics.map((id) => epicById.get(id)?.title);
+    if (deltaNoEpic) names.push("No epic");
+    const colors = deltaEpics
+      .map((id) => epicById.get(id)?.color)
+      .filter((c): c is string => !!c);
+    chips.push({
+      key: "epic",
+      icon: <Bookmark className={CHIP_ICON_CLASS} />,
+      label: "Epic",
+      valueIcons: colors.length > 0 ? <DotStack colors={colors} /> : undefined,
+      value: summarize(names),
+      onRemove: () => clearDimension("epic"),
+    });
+  }
+  if (deltaSprints.length > 0 || deltaNoSprint) {
+    const sprintById = new Map(sprints.map((s) => [s.id, s]));
+    const names = deltaSprints.map((id) => sprintById.get(id)?.name);
+    if (deltaNoSprint) names.push("No sprint");
+    chips.push({
+      key: "sprint",
+      icon: <Zap className={CHIP_ICON_CLASS} />,
+      label: "Sprint",
+      value: summarize(names),
+      onRemove: () => clearDimension("sprint"),
     });
   }
   if (deltaLabels.length > 0) {

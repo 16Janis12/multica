@@ -53,6 +53,8 @@ const issue: Issue = {
   creator_id: "member-1",
   parent_issue_id: "parent-1",
   project_id: null,
+    epic_id: null,
+    sprint_id: null,
   position: 1,
   stage: null,
   start_date: null,

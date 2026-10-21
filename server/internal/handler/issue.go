@@ -74,6 +74,8 @@ type IssueResponse struct {
 	// an endpoint that skips the filler emits null rather than a bare pointer.
 	DuplicateOf *IssueRefResponse `json:"duplicate_of"`
 	ProjectID   *string           `json:"project_id"`
+	EpicID      *string           `json:"epic_id"`
+	SprintID    *string           `json:"sprint_id"`
 	Position    float64           `json:"position"`
 	// Stage groups sub-issues under the same parent into ordered barrier
 	// groups (null = unstaged). See service/issue_wakeup_system.go for how a
@@ -492,6 +494,8 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		ParentIssueID:      uuidToPtr(i.ParentIssueID),
 		duplicateOfIssueID: duplicateOfPointer(i.Status, i.DuplicateOfIssueID),
 		ProjectID:          uuidToPtr(i.ProjectID),
+		EpicID:             uuidToPtr(i.EpicID),
+		SprintID:           uuidToPtr(i.SprintID),
 		Position:           i.Position,
 		Stage:              int4ToPtr(i.Stage),
 		StartDate:          dateToPtr(i.StartDate),
@@ -530,6 +534,8 @@ func issueListRowToResponse(i db.ListIssuesRow, issuePrefix string) IssueRespons
 		ParentIssueID:      uuidToPtr(i.ParentIssueID),
 		duplicateOfIssueID: duplicateOfPointer(i.Status, i.DuplicateOfIssueID),
 		ProjectID:          uuidToPtr(i.ProjectID),
+		EpicID:             uuidToPtr(i.EpicID),
+		SprintID:           uuidToPtr(i.SprintID),
 		Position:           i.Position,
 		Stage:              int4ToPtr(i.Stage),
 		StartDate:          dateToPtr(i.StartDate),
@@ -1641,6 +1647,62 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		where = append(where, "("+strings.Join(ors, " OR ")+")")
 	}
 
+	var epicFilter pgtype.UUID
+	if e := r.URL.Query().Get("epic_id"); e != "" {
+		id, ok := parseUUIDOrBadRequest(w, e, "epic_id")
+		if !ok {
+			return
+		}
+		epicFilter = id
+	}
+	if epicFilter.Valid {
+		where = append(where, fmt.Sprintf("i.epic_id = %s::uuid", addArg(epicFilter)))
+	}
+
+	var sprintFilter pgtype.UUID
+	if s := r.URL.Query().Get("sprint_id"); s != "" {
+		id, ok := parseUUIDOrBadRequest(w, s, "sprint_id")
+		if !ok {
+			return
+		}
+		sprintFilter = id
+	}
+	if sprintFilter.Valid {
+		where = append(where, fmt.Sprintf("i.sprint_id = %s::uuid", addArg(sprintFilter)))
+	}
+
+	epicIDs, ok := parseUUIDParamList(w, r.URL.Query().Get("epic_ids"), "epic_ids")
+	if !ok {
+		return
+	}
+	includeNoEpic := r.URL.Query().Get("include_no_epic") == "true"
+	if len(epicIDs) > 0 || includeNoEpic {
+		ors := make([]string, 0, 2)
+		if len(epicIDs) > 0 {
+			ors = append(ors, fmt.Sprintf("i.epic_id = ANY(%s::uuid[])", addArg(epicIDs)))
+		}
+		if includeNoEpic {
+			ors = append(ors, "i.epic_id IS NULL")
+		}
+		where = append(where, "("+strings.Join(ors, " OR ")+")")
+	}
+
+	sprintIDs, ok := parseUUIDParamList(w, r.URL.Query().Get("sprint_ids"), "sprint_ids")
+	if !ok {
+		return
+	}
+	includeNoSprint := r.URL.Query().Get("include_no_sprint") == "true"
+	if len(sprintIDs) > 0 || includeNoSprint {
+		ors := make([]string, 0, 2)
+		if len(sprintIDs) > 0 {
+			ors = append(ors, fmt.Sprintf("i.sprint_id = ANY(%s::uuid[])", addArg(sprintIDs)))
+		}
+		if includeNoSprint {
+			ors = append(ors, "i.sprint_id IS NULL")
+		}
+		where = append(where, "("+strings.Join(ors, " OR ")+")")
+	}
+
 	labelIDs, ok := parseUUIDParamList(w, r.URL.Query().Get("label_ids"), "label_ids")
 	if !ok {
 		return
@@ -1754,7 +1816,7 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	query := fmt.Sprintf(`SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
        i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.last_activity_at, i.number, i.project_id, i.metadata, i.stage, i.properties,
-	   i.revision, i.duplicate_of_issue_id
+	   i.revision, i.duplicate_of_issue_id, i.epic_id, i.sprint_id
 FROM issue i
 WHERE %s
 ORDER BY %s
@@ -1796,6 +1858,8 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 			&row.Properties,
 			&row.Revision,
 			&row.DuplicateOfIssueID,
+			&row.EpicID,
+			&row.SprintID,
 		); err != nil {
 			slog.Warn("ListIssues scan failed", "error", err)
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
@@ -2354,7 +2418,7 @@ WITH ranked AS (
 		i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
 		i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
 		i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.last_activity_at,
-		i.number, i.project_id, i.metadata, i.stage, i.properties, i.revision, i.duplicate_of_issue_id,
+		i.number, i.project_id, i.metadata, i.stage, i.properties, i.revision, i.duplicate_of_issue_id, i.epic_id, i.sprint_id,
 		COUNT(*) OVER (PARTITION BY i.assignee_type, i.assignee_id) AS group_total,
 		ROW_NUMBER() OVER (
 			PARTITION BY i.assignee_type, i.assignee_id
@@ -2367,7 +2431,7 @@ SELECT
 	id, workspace_id, title, description, status, priority,
 	assignee_type, assignee_id, creator_type, creator_id,
 	parent_issue_id, position, start_date, due_date, created_at, updated_at, last_activity_at,
-	number, project_id, metadata, stage, properties, revision, duplicate_of_issue_id, group_total
+	number, project_id, metadata, stage, properties, revision, duplicate_of_issue_id, epic_id, sprint_id, group_total
 FROM ranked
 WHERE rn > %s AND rn <= %s + %s
 ORDER BY
@@ -2417,6 +2481,8 @@ ORDER BY
 			&row.Properties,
 			&row.Revision,
 			&row.DuplicateOfIssueID,
+			&row.EpicID,
+			&row.SprintID,
 			&row.GroupTotal,
 		); err != nil {
 			slog.Warn("ListGroupedIssues scan failed", "error", err)
@@ -3036,6 +3102,8 @@ type CreateIssueRequest struct {
 	AssigneeID    *string  `json:"assignee_id"`
 	ParentIssueID *string  `json:"parent_issue_id"`
 	ProjectID     *string  `json:"project_id"`
+	EpicID        *string  `json:"epic_id"`
+	SprintID      *string  `json:"sprint_id"`
 	Stage         *int32   `json:"stage,omitempty"`
 	StartDate     *string  `json:"start_date"`
 	DueDate       *string  `json:"due_date"`
@@ -3278,6 +3346,24 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		projectID = id
 	}
 
+	var epicID pgtype.UUID
+	if req.EpicID != nil && *req.EpicID != "" {
+		id, ok := parseUUIDOrBadRequest(w, *req.EpicID, "epic_id")
+		if !ok {
+			return
+		}
+		epicID = id
+	}
+
+	var sprintID pgtype.UUID
+	if req.SprintID != nil && *req.SprintID != "" {
+		id, ok := parseUUIDOrBadRequest(w, *req.SprintID, "sprint_id")
+		if !ok {
+			return
+		}
+		sprintID = id
+	}
+
 	// Project workflow (MUL-7420). A new issue in a project on a named
 	// workflow must start on a status the workflow lists, and a column the
 	// project hands off gives the new issue to its handler unless the caller
@@ -3453,6 +3539,8 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		CreatorID:      parseUUID(actualCreatorID),
 		ParentIssueID:  parentIssueID,
 		ProjectID:      projectID,
+		EpicID:         epicID,
+		SprintID:       sprintID,
 		StartDate:      startDate,
 		DueDate:        dueDate,
 		OriginType:     originType,
@@ -3502,6 +3590,14 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, service.ErrProjectNotFound) {
 		writeError(w, http.StatusBadRequest, "project not found in this workspace")
+		return
+	}
+	if errors.Is(err, service.ErrEpicNotFound) {
+		writeError(w, http.StatusBadRequest, "epic not found in this workspace")
+		return
+	}
+	if errors.Is(err, service.ErrSprintNotFound) {
+		writeError(w, http.StatusBadRequest, "sprint not found in this workspace")
 		return
 	}
 	if errors.Is(err, service.ErrIssueLabelNotFound) {
@@ -3561,6 +3657,8 @@ type UpdateIssueRequest struct {
 	DueDate         *string  `json:"due_date"`
 	ParentIssueID   *string  `json:"parent_issue_id"`
 	ProjectID       *string  `json:"project_id"`
+	EpicID          *string  `json:"epic_id"`
+	SprintID        *string  `json:"sprint_id"`
 	Stage           *int32   `json:"stage"`
 	// AttachmentIDs lets the description editor bind newly uploaded files to
 	// this issue so they surface in `GET /api/issues/:id/attachments` and the
@@ -3667,6 +3765,12 @@ func refreshUntouchedNullableIssueParams(params *db.UpdateIssueParams, current d
 	}
 	if _, touched := rawFields["project_id"]; !touched {
 		params.ProjectID = current.ProjectID
+	}
+	if _, touched := rawFields["epic_id"]; !touched {
+		params.EpicID = current.EpicID
+	}
+	if _, touched := rawFields["sprint_id"]; !touched {
+		params.SprintID = current.SprintID
 	}
 	if _, touched := rawFields["stage"]; !touched {
 		params.Stage = current.Stage
@@ -3830,6 +3934,8 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		DueDate:       prevIssue.DueDate,
 		ParentIssueID: prevIssue.ParentIssueID,
 		ProjectID:     prevIssue.ProjectID,
+		EpicID:        prevIssue.EpicID,
+		SprintID:      prevIssue.SprintID,
 		Stage:         prevIssue.Stage,
 		// Checked against the locked rows in updateIssueWithStatusGuard.
 		DuplicateOfIssueID: duplicateOfID,
@@ -3978,6 +4084,54 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 			params.ProjectID = projectUUID
 		} else {
 			params.ProjectID = pgtype.UUID{Valid: false}
+		}
+	}
+	if _, ok := rawFields["epic_id"]; ok {
+		if req.EpicID != nil && *req.EpicID != "" {
+			epicUUID, ok := parseUUIDOrBadRequest(w, *req.EpicID, "epic_id")
+			if !ok {
+				return
+			}
+			if _, err := h.Queries.GetEpicInWorkspace(r.Context(), db.GetEpicInWorkspaceParams{
+				ID:          epicUUID,
+				WorkspaceID: prevIssue.WorkspaceID,
+			}); err != nil {
+				if !isNotFound(err) {
+					slog.Error("update issue: validate epic scope",
+						append(logger.RequestAttrs(r), "epic_id", uuidToString(epicUUID), "error", err)...)
+					writeError(w, http.StatusInternalServerError, "failed to validate epic")
+					return
+				}
+				writeError(w, http.StatusBadRequest, "epic not found in this workspace")
+				return
+			}
+			params.EpicID = epicUUID
+		} else {
+			params.EpicID = pgtype.UUID{Valid: false}
+		}
+	}
+	if _, ok := rawFields["sprint_id"]; ok {
+		if req.SprintID != nil && *req.SprintID != "" {
+			sprintUUID, ok := parseUUIDOrBadRequest(w, *req.SprintID, "sprint_id")
+			if !ok {
+				return
+			}
+			if _, err := h.Queries.GetSprintInWorkspace(r.Context(), db.GetSprintInWorkspaceParams{
+				ID:          sprintUUID,
+				WorkspaceID: prevIssue.WorkspaceID,
+			}); err != nil {
+				if !isNotFound(err) {
+					slog.Error("update issue: validate sprint scope",
+						append(logger.RequestAttrs(r), "sprint_id", uuidToString(sprintUUID), "error", err)...)
+					writeError(w, http.StatusInternalServerError, "failed to validate sprint")
+					return
+				}
+				writeError(w, http.StatusBadRequest, "sprint not found in this workspace")
+				return
+			}
+			params.SprintID = sprintUUID
+		} else {
+			params.SprintID = pgtype.UUID{Valid: false}
 		}
 	}
 	if _, ok := rawFields["stage"]; ok {
@@ -4628,7 +4782,7 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		req.Updates.Priority != nil ||
 		req.Updates.Position != nil
 	if !hasMutation {
-		for _, k := range []string{"assignee_type", "assignee_id", "start_date", "due_date", "parent_issue_id", "project_id", "stage"} {
+		for _, k := range []string{"assignee_type", "assignee_id", "start_date", "due_date", "parent_issue_id", "project_id", "epic_id", "sprint_id", "stage"} {
 			if _, ok := rawUpdates[k]; ok {
 				hasMutation = true
 				break
@@ -4689,6 +4843,50 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		batchProjectID = projectUUID
 	}
 
+	batchEpicID := pgtype.UUID{Valid: false}
+	if _, ok := rawUpdates["epic_id"]; ok && req.Updates.EpicID != nil && *req.Updates.EpicID != "" {
+		epicUUID, ok := parseUUIDOrBadRequest(w, *req.Updates.EpicID, "epic_id")
+		if !ok {
+			return
+		}
+		if _, err := h.Queries.GetEpicInWorkspace(r.Context(), db.GetEpicInWorkspaceParams{
+			ID:          epicUUID,
+			WorkspaceID: wsUUID,
+		}); err != nil {
+			if !isNotFound(err) {
+				slog.Error("batch update issues: validate epic scope",
+					append(logger.RequestAttrs(r), "epic_id", uuidToString(epicUUID), "error", err)...)
+				writeError(w, http.StatusInternalServerError, "failed to validate epic")
+				return
+			}
+			writeError(w, http.StatusBadRequest, "epic not found in this workspace")
+			return
+		}
+		batchEpicID = epicUUID
+	}
+
+	batchSprintID := pgtype.UUID{Valid: false}
+	if _, ok := rawUpdates["sprint_id"]; ok && req.Updates.SprintID != nil && *req.Updates.SprintID != "" {
+		sprintUUID, ok := parseUUIDOrBadRequest(w, *req.Updates.SprintID, "sprint_id")
+		if !ok {
+			return
+		}
+		if _, err := h.Queries.GetSprintInWorkspace(r.Context(), db.GetSprintInWorkspaceParams{
+			ID:          sprintUUID,
+			WorkspaceID: wsUUID,
+		}); err != nil {
+			if !isNotFound(err) {
+				slog.Error("batch update issues: validate sprint scope",
+					append(logger.RequestAttrs(r), "sprint_id", uuidToString(sprintUUID), "error", err)...)
+				writeError(w, http.StatusInternalServerError, "failed to validate sprint")
+				return
+			}
+			writeError(w, http.StatusBadRequest, "sprint not found in this workspace")
+			return
+		}
+		batchSprintID = sprintUUID
+	}
+
 	updated := 0
 	// One Resolver for the whole batch — a per-issue filler would query the
 	// catalog once per custom-status row. (MUL-6243)
@@ -4719,6 +4917,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			DueDate:       prevIssue.DueDate,
 			ParentIssueID: prevIssue.ParentIssueID,
 			ProjectID:     prevIssue.ProjectID,
+			EpicID:        prevIssue.EpicID,
+			SprintID:      prevIssue.SprintID,
 			Stage:         prevIssue.Stage,
 		}
 
@@ -4820,6 +5020,12 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		if _, ok := rawUpdates["project_id"]; ok {
 			// Resolved before the loop; an explicit null stays invalid and clears.
 			params.ProjectID = batchProjectID
+		}
+		if _, ok := rawUpdates["epic_id"]; ok {
+			params.EpicID = batchEpicID
+		}
+		if _, ok := rawUpdates["sprint_id"]; ok {
+			params.SprintID = batchSprintID
 		}
 		if _, ok := rawUpdates["stage"]; ok {
 			if req.Updates.Stage != nil {

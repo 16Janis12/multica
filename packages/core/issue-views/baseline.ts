@@ -22,6 +22,10 @@ export interface IssueViewBaseline {
   creator: Set<string>;
   project: Set<string>;
   includeNoProject: boolean;
+  epic: Set<string>;
+  includeNoEpic: boolean;
+  sprint: Set<string>;
+  includeNoSprint: boolean;
   projectStatus: Set<string>;
   label: Set<string>;
   /** Property definition id → fixed member keys (`propertyFilterValueKey`). */
@@ -80,6 +84,8 @@ export function baselineFromQuery(query: Record<string, unknown>): IssueViewBase
   const assigneeFilters = actorArray(query.assigneeFilters);
   const creatorFilters = actorArray(query.creatorFilters);
   const projectFilters = stringArray(query.projectFilters);
+  const epicFilters = stringArray(query.epicFilters);
+  const sprintFilters = stringArray(query.sprintFilters);
   // A saved view predating this dimension has no key at all, and an unknown
   // member cannot be represented in the store — both collapse to "no filter".
   const projectStatusFilters = stringArray(query.projectStatusFilters).filter(
@@ -88,6 +94,8 @@ export function baselineFromQuery(query: Record<string, unknown>): IssueViewBase
   const labelFilters = stringArray(query.labelFilters);
   const includeNoAssignee = query.includeNoAssignee === true;
   const includeNoProject = query.includeNoProject === true;
+  const includeNoEpic = query.includeNoEpic === true;
+  const includeNoSprint = query.includeNoSprint === true;
 
   const propertyFilters: Record<string, PropertyFilterValue[]> = {};
   const property = new Map<string, Set<string>>();
@@ -111,6 +119,10 @@ export function baselineFromQuery(query: Record<string, unknown>): IssueViewBase
     creator: new Set(creatorFilters.map(actorFilterKey)),
     project: new Set(projectFilters),
     includeNoProject,
+    epic: new Set(epicFilters),
+    includeNoEpic,
+    sprint: new Set(sprintFilters),
+    includeNoSprint,
     projectStatus: new Set(projectStatusFilters),
     label: new Set(labelFilters),
     property,
@@ -122,6 +134,10 @@ export function baselineFromQuery(query: Record<string, unknown>): IssueViewBase
       creatorFilters,
       projectFilters,
       includeNoProject,
+      epicFilters,
+      includeNoEpic,
+      sprintFilters,
+      includeNoSprint,
       projectStatusFilters,
       labelFilters,
       propertyFilters,

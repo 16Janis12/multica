@@ -14,6 +14,10 @@ export interface IssueFilters {
   creatorFilters: ActorFilterValue[];
   projectFilters: string[];
   includeNoProject: boolean;
+  epicFilters?: string[];
+  includeNoEpic?: boolean;
+  sprintFilters?: string[];
+  includeNoSprint?: boolean;
   /** Lifecycle status of the parent project. Needs
    *  `IssueFilterContext.projectStatusById` to be evaluated — an Issue only
    *  carries `project_id`. */
@@ -48,6 +52,10 @@ export interface IssueFilterState {
   creatorFilters: ActorFilterValue[];
   projectFilters: string[];
   includeNoProject: boolean;
+  epicFilters?: string[];
+  includeNoEpic?: boolean;
+  sprintFilters?: string[];
+  includeNoSprint?: boolean;
   /** See IssueFilters.projectStatusFilters. */
   projectStatusFilters?: ProjectStatus[];
   labelFilters: string[];
@@ -205,6 +213,13 @@ export function applyIssueFilters(
     assigneeFilters.length > 0 ||
     includeNoAssignee;
   const hasProjectFilter = projectFilters.length > 0 || includeNoProject;
+  const epicFilters = filters.epicFilters ?? [];
+  const includeNoEpic = filters.includeNoEpic === true;
+  const hasEpicFilter = epicFilters.length > 0 || includeNoEpic;
+  const sprintFilters = filters.sprintFilters ?? [];
+  const includeNoSprint = filters.includeNoSprint === true;
+  const hasSprintFilter = sprintFilters.length > 0 || includeNoSprint;
+
   const projectStatusFilters = filters.projectStatusFilters ?? [];
   // Without the catalog the predicate cannot be answered. Treat that as
   // "no filter" — the server-driven surfaces enforce it for real, and a
@@ -265,6 +280,26 @@ export function applyIssueFilters(
       }
     }
 
+    if (hasEpicFilter) {
+      if (!issue.epic_id) {
+        if (!includeNoEpic) return false;
+      } else if (epicFilters.length > 0) {
+        if (!epicFilters.includes(issue.epic_id)) return false;
+      } else {
+        return false;
+      }
+    }
+
+    if (hasSprintFilter) {
+      if (!issue.sprint_id) {
+        if (!includeNoSprint) return false;
+      } else if (sprintFilters.length > 0) {
+        if (!sprintFilters.includes(issue.sprint_id)) return false;
+      } else {
+        return false;
+      }
+    }
+
     if (hasProjectStatusFilter) {
       // An issue with no project has no status to match, so it never
       // survives — same as the server's EXISTS predicate. `includeNoProject`
@@ -302,6 +337,10 @@ export function filterIssues(issues: Issue[], filters: IssueFilters): Issue[] {
       creatorFilters: filters.creatorFilters,
       projectFilters: filters.projectFilters,
       includeNoProject: filters.includeNoProject,
+      epicFilters: filters.epicFilters,
+      includeNoEpic: filters.includeNoEpic,
+      sprintFilters: filters.sprintFilters,
+      includeNoSprint: filters.includeNoSprint,
       projectStatusFilters: filters.projectStatusFilters,
       labelFilters: filters.labelFilters,
       propertyFilters: filters.propertyFilters,

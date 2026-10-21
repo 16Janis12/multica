@@ -119,6 +119,10 @@ function issueMatchesDescriptor(
       return issue.project_id === owner.project_id;
     case "parent":
       return issue.parent_issue_id === owner.parent_id;
+    case "epic":
+      return issue.epic_id === owner.epic_id;
+    case "sprint":
+      return issue.sprint_id === owner.sprint_id;
     case "property": {
       const propertyValue = issue.properties?.[owner.property_id];
       if (owner.value_state === "unset") return propertyValue === undefined;

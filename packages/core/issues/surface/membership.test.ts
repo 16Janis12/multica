@@ -22,6 +22,8 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
     creator_id: "me",
     parent_issue_id: null,
     project_id: "p1",
+    epic_id: null,
+    sprint_id: null,
     position: 1,
     stage: null,
     start_date: null,

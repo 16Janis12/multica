@@ -2865,6 +2865,61 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 		// below — a failure degrades to the workspace-wide status rules.
 		resp.ProjectWorkflow = h.claimProjectWorkflow(r.Context(), issue, task)
 
+		if issue.SprintID.Valid {
+			if sprint, err := h.Queries.GetSprintInWorkspace(r.Context(), db.GetSprintInWorkspaceParams{
+				ID:          issue.SprintID,
+				WorkspaceID: issue.WorkspaceID,
+			}); err == nil {
+				resp.SprintID = uuidToString(sprint.ID)
+				resp.SprintName = sprint.Name
+				if sprint.Goal.Valid {
+					resp.SprintGoal = sprint.Goal.String
+				}
+				if sprint.StartDate.Valid {
+					resp.SprintStartDate = sprint.StartDate.Time.Format("2006-01-02")
+				}
+				if sprint.EndDate.Valid {
+					resp.SprintEndDate = sprint.EndDate.Time.Format("2006-01-02")
+					days := int(sprint.EndDate.Time.Sub(time.Now().UTC()).Hours() / 24)
+					if days < 0 {
+						days = 0
+					}
+					resp.SprintDaysRemaining = &days
+				}
+			}
+		}
+
+		if issue.EpicID.Valid {
+			if epic, err := h.Queries.GetEpicInWorkspace(r.Context(), db.GetEpicInWorkspaceParams{
+				ID:          issue.EpicID,
+				WorkspaceID: issue.WorkspaceID,
+			}); err == nil {
+				resp.EpicID = uuidToString(epic.ID)
+				resp.EpicTitle = epic.Title
+				resp.EpicIdentifier = epic.Identifier
+				if epic.Description.Valid {
+					resp.EpicGoal = epic.Description.String
+				}
+				termKeys, _ := h.terminalIssueStatusKeys(r.Context(), issue.WorkspaceID)
+				if len(termKeys) == 0 {
+					termKeys = []string{"done", "cancelled"}
+				}
+				if stats, err := h.Queries.GetEpicIssueStats(r.Context(), db.GetEpicIssueStatsParams{
+					WorkspaceID:        issue.WorkspaceID,
+					EpicIds:            []pgtype.UUID{epic.ID},
+					TerminalStatusKeys: termKeys,
+				}); err == nil && len(stats) > 0 {
+					total := stats[0].TotalCount
+					done := stats[0].DoneCount
+					progress := 0
+					if total > 0 {
+						progress = int((done * 100) / total)
+					}
+					resp.EpicProgress = &progress
+				}
+			}
+		}
+
 		// Load every planned input as one chronological, de-duplicated set.
 		// The trigger is included here so the delivery receipt can only contain
 		// comments whose body we successfully embedded. Missing/deleted rows are

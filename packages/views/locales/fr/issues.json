@@ -238,7 +238,9 @@
     "card_project": "Projet",
     "card_labels": "Étiquettes",
     "card_child_progress": "Avancement des sous-tâches",
-    "show_sub_issues": "Afficher les sous-tâches"
+    "show_sub_issues": "Afficher les sous-tâches",
+    "group_epic": "Épique",
+    "group_sprint": "Sprint"
   },
   "view": {
     "tooltip_board": "Vue tableau",
