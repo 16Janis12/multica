@@ -508,6 +508,21 @@ export function createZhDict(
     },
     entries: [
       {
+        version: "0.6.8",
+        date: "2026-10-22",
+        title: "Epic 与 Sprint 交互式创建、快捷弹窗及命令面板支持",
+        changes: [],
+        features: [
+          "Epic 与 Sprint 交互式创建：通过全新弹窗对话框，支持直接在问题详情页头部、下拉选择器与 Picker 中快速新建史诗（Epic）与冲刺（Sprint）。",
+          "弹窗体系注册：新增 create-epic 与 create-sprint 模态弹窗，支持关联项目、设定起止日期以及冲刺目标管理。",
+          "命令面板快捷集成：在全局搜索命令栏中新增快捷命令（`new-epic`、`new-sprint`），支持键盘一键唤起创建流程。",
+        ],
+        improvements: [
+          "敏捷管理体验优化：无需离开当前工作看板或问题列表即可直接完成 Epic/Sprint 的就地创建与任务归属。",
+        ],
+        fixes: [],
+      },
+      {
         version: "0.6.7",
         date: "2026-10-21",
         title: "Epic 与 Sprint 敏捷管理、燃尽图可视化、Antigravity 多模型配额探针及成员运行时调度",

@@ -523,6 +523,21 @@ export function createEnDict(
     },
     entries: [
       {
+        version: "0.6.8",
+        date: "2026-10-22",
+        title: "Interactive Epic & Sprint Creation, Modal Dialogs & Command Palette Shortcuts",
+        changes: [],
+        features: [
+          "Interactive Epic & Sprint Creation: create new epics and sprints directly from issue headers, dropdown selectors, and pickers with dedicated modal dialogs.",
+          "Modal Store Registration: added create-epic and create-sprint dialogs with project association, date ranges, and sprint goal management.",
+          "Command Palette Shortcuts: quickly trigger epic and sprint creation directly from the global search command bar (`new-epic`, `new-sprint`).",
+        ],
+        improvements: [
+          "Agile Planning Flow: streamlined issue management by allowing on-the-fly epic and sprint setup without leaving the active board or view.",
+        ],
+        fixes: [],
+      },
+      {
         version: "0.6.7",
         date: "2026-10-21",
         title: "Epics and Sprints, burndown visualization, multi-model Antigravity quotas, and member runtime dispatch",
