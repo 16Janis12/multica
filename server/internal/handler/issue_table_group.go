@@ -25,6 +25,8 @@ type issueTableGroupValueResponse struct {
 	Status     string               `json:"status,omitempty"`
 	Actor      *issueTableActorRef  `json:"actor"`
 	ProjectID  *string              `json:"project_id,omitempty"`
+	EpicID     *string              `json:"epic_id,omitempty"`
+	SprintID   *string              `json:"sprint_id,omitempty"`
 	ParentID   *string              `json:"parent_id,omitempty"`
 	Parent     *issueTableParentRef `json:"parent,omitempty"`
 	PropertyID string               `json:"property_id,omitempty"`
@@ -272,6 +274,24 @@ END, ''))`,
   ''
 )) END`,
 		}, true
+	case "epic":
+		return resolvedIssueTableGroup{
+			kind:      "epic",
+			groupExpr: "COALESCE(i.epic_id::text, '__no_epic__')",
+			groupSortExpr: `CASE WHEN group_value = '__no_epic__' THEN '' ELSE LOWER(COALESCE(
+  (SELECT e.title FROM epic e WHERE e.workspace_id = $1 AND e.id = group_value::uuid),
+  ''
+)) END`,
+		}, true
+	case "sprint":
+		return resolvedIssueTableGroup{
+			kind:      "sprint",
+			groupExpr: "COALESCE(i.sprint_id::text, '__no_sprint__')",
+			groupSortExpr: `CASE WHEN group_value = '__no_sprint__' THEN '' ELSE LOWER(COALESCE(
+  (SELECT s.name FROM sprint s WHERE s.workspace_id = $1 AND s.id = group_value::uuid),
+  ''
+)) END`,
+		}, true
 	case "parent":
 		return resolvedIssueTableGroup{
 			kind:      "parent",
@@ -287,7 +307,7 @@ END, ''))`,
 			return resolvedIssueTableGroup{}, false
 		}
 		secondaryCategory := group.Secondary == "status_category"
-		if group.Primary != "assignee" && group.Primary != "project" && group.Primary != "parent" {
+		if group.Primary != "assignee" && group.Primary != "project" && group.Primary != "parent" && group.Primary != "epic" && group.Primary != "sprint" {
 			writeIssueTableUnsupportedGroup(w, "primary_group_unsupported", "This primary group is not supported.")
 			return resolvedIssueTableGroup{}, false
 		}
@@ -509,6 +529,10 @@ func (group resolvedIssueTableGroup) orderExpression(addArg func(any) string) st
 		return "CASE split_part(group_value, ':', 1) WHEN 'member' THEN 0 WHEN 'agent' THEN 1 WHEN 'squad' THEN 2 ELSE 3 END"
 	case "project":
 		return "CASE WHEN group_value = '__no_project__' THEN 0 ELSE 1 END"
+	case "epic":
+		return "CASE WHEN group_value = '__no_epic__' THEN 0 ELSE 1 END"
+	case "sprint":
+		return "CASE WHEN group_value = '__no_sprint__' THEN 0 ELSE 1 END"
 	case "parent":
 		return "CASE WHEN group_value = '__no_parent__' THEN 0 ELSE 1 END"
 	case "property":
@@ -654,6 +678,28 @@ func (group resolvedIssueTableGroup) descriptor(raw string, count int64, context
 		}
 		descriptor.Key = "project:" + raw
 		descriptor.Value.ProjectID = &raw
+	case "epic":
+		descriptor.Value.Kind = "epic"
+		if raw == "__no_epic__" {
+			descriptor.Key = "epic:none"
+			return descriptor, nil
+		}
+		if _, err := util.ParseUUID(raw); err != nil {
+			return descriptor, fmt.Errorf("unexpected epic group value %q", raw)
+		}
+		descriptor.Key = "epic:" + raw
+		descriptor.Value.EpicID = &raw
+	case "sprint":
+		descriptor.Value.Kind = "sprint"
+		if raw == "__no_sprint__" {
+			descriptor.Key = "sprint:none"
+			return descriptor, nil
+		}
+		if _, err := util.ParseUUID(raw); err != nil {
+			return descriptor, fmt.Errorf("unexpected sprint group value %q", raw)
+		}
+		descriptor.Key = "sprint:" + raw
+		descriptor.Value.SprintID = &raw
 	case "parent":
 		descriptor.Value.Kind = "parent"
 		if raw == "__no_parent__" {
@@ -819,6 +865,38 @@ func (group resolvedIssueTableGroup) predicate(w http.ResponseWriter, key string
 			return "", false
 		}
 		return fmt.Sprintf("i.project_id = %s::uuid", addArg(id)), true
+	case "epic":
+		const prefix = "epic:"
+		if !strings.HasPrefix(key, prefix) {
+			writeError(w, http.StatusBadRequest, "invalid group_key")
+			return "", false
+		}
+		raw := strings.TrimPrefix(key, prefix)
+		if raw == "none" {
+			return "i.epic_id IS NULL", true
+		}
+		id, err := util.ParseUUID(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid group_key")
+			return "", false
+		}
+		return fmt.Sprintf("i.epic_id = %s::uuid", addArg(id)), true
+	case "sprint":
+		const prefix = "sprint:"
+		if !strings.HasPrefix(key, prefix) {
+			writeError(w, http.StatusBadRequest, "invalid group_key")
+			return "", false
+		}
+		raw := strings.TrimPrefix(key, prefix)
+		if raw == "none" {
+			return "i.sprint_id IS NULL", true
+		}
+		id, err := util.ParseUUID(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid group_key")
+			return "", false
+		}
+		return fmt.Sprintf("i.sprint_id = %s::uuid", addArg(id)), true
 	case "parent":
 		const prefix = "parent:"
 		if !strings.HasPrefix(key, prefix) {

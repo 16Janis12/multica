@@ -63,6 +63,12 @@ func issueTableQueryWithoutFacet(input issueTableQuerySpec, facet issueTableFace
 	case "project":
 		output.Filters.ProjectIDs = nil
 		output.Filters.IncludeNoProject = false
+	case "epic":
+		output.Filters.EpicIDs = nil
+		output.Filters.IncludeNoEpic = false
+	case "sprint":
+		output.Filters.SprintIDs = nil
+		output.Filters.IncludeNoSprint = false
 	case "label":
 		output.Filters.LabelIDs = nil
 	case "property":
@@ -97,6 +103,10 @@ func issueTableBaseFacetExpression(query issueTableQuerySpec, facet issueTableFa
 		return "i.creator_type || ':' || i.creator_id::text", len(query.Filters.Creators) == 0
 	case "project":
 		return "COALESCE(i.project_id::text, '__none__')", len(query.Filters.ProjectIDs) == 0 && !query.Filters.IncludeNoProject
+	case "epic":
+		return "COALESCE(i.epic_id::text, '__none__')", len(query.Filters.EpicIDs) == 0 && !query.Filters.IncludeNoEpic
+	case "sprint":
+		return "COALESCE(i.sprint_id::text, '__none__')", len(query.Filters.SprintIDs) == 0 && !query.Filters.IncludeNoSprint
 	default:
 		return "", false
 	}
@@ -201,6 +211,10 @@ func (h *Handler) issueTableFacetQuery(w http.ResponseWriter, r *http.Request, r
 		query = fmt.Sprintf(`SELECT i.creator_type || ':' || i.creator_id::text, COUNT(*)::bigint FROM issue i WHERE %s GROUP BY 1`, compiled.where)
 	case "project":
 		query = fmt.Sprintf(`SELECT COALESCE(i.project_id::text, '__none__'), COUNT(*)::bigint FROM issue i WHERE %s GROUP BY 1`, compiled.where)
+	case "epic":
+		query = fmt.Sprintf(`SELECT COALESCE(i.epic_id::text, '__none__'), COUNT(*)::bigint FROM issue i WHERE %s GROUP BY 1`, compiled.where)
+	case "sprint":
+		query = fmt.Sprintf(`SELECT COALESCE(i.sprint_id::text, '__none__'), COUNT(*)::bigint FROM issue i WHERE %s GROUP BY 1`, compiled.where)
 	case "label":
 		query = fmt.Sprintf(`SELECT itl.label_id::text, COUNT(DISTINCT i.id)::bigint FROM issue i JOIN issue_to_label itl ON itl.issue_id = i.id WHERE %s GROUP BY itl.label_id`, compiled.where)
 	case "working_agents":

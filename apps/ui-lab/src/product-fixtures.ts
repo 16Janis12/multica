@@ -68,6 +68,8 @@ export const issues: Issue[] = titles.map((title, index) => ({
   creator_id: user.id,
   parent_issue_id: null,
   project_id: null,
+  epic_id: null,
+  sprint_id: null,
   position: index * 1000,
   stage: null,
   start_date: null,

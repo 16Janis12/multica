@@ -88,6 +88,10 @@ type issueTableFiltersRequest struct {
 	Creators          []issueTableActorRef `json:"creators,omitempty"`
 	ProjectIDs        []string             `json:"project_ids,omitempty"`
 	IncludeNoProject  bool                 `json:"include_no_project,omitempty"`
+	EpicIDs           []string             `json:"epic_ids,omitempty"`
+	IncludeNoEpic     bool                 `json:"include_no_epic,omitempty"`
+	SprintIDs         []string             `json:"sprint_ids,omitempty"`
+	IncludeNoSprint   bool                 `json:"include_no_sprint,omitempty"`
 	// ProjectStatuses filters on the parent project's lifecycle status
 	// (`validProjectStatuses`), independently of ProjectIDs.
 	ProjectStatuses []string `json:"project_statuses,omitempty"`
@@ -262,6 +266,8 @@ func canonicalIssueTableFingerprint(workspaceID string, spec issueTableQuerySpec
 	normalized.Filters.Priorities = sortedUniqueStrings(normalized.Filters.Priorities)
 	normalized.Filters.ProjectIDs = sortedUniqueStrings(normalized.Filters.ProjectIDs)
 	normalized.Filters.ProjectStatuses = sortedUniqueStrings(normalized.Filters.ProjectStatuses)
+	normalized.Filters.EpicIDs = sortedUniqueStrings(normalized.Filters.EpicIDs)
+	normalized.Filters.SprintIDs = sortedUniqueStrings(normalized.Filters.SprintIDs)
 	normalized.Filters.LabelIDs = sortedUniqueStrings(normalized.Filters.LabelIDs)
 	normalized.Filters.Assignees = sortedUniqueActors(normalized.Filters.Assignees)
 	normalized.Filters.WorkingIssueIDs = sortedUniqueStrings(normalized.Filters.WorkingIssueIDs)
@@ -601,6 +607,36 @@ func (h *Handler) compileIssueTableQuery(w http.ResponseWriter, r *http.Request,
 		}
 		if spec.Filters.IncludeNoProject {
 			ors = append(ors, "i.project_id IS NULL")
+		}
+		where = append(where, "("+strings.Join(ors, " OR ")+")")
+	}
+
+	epicIDs, ok := parseIssueTableUUIDList(w, spec.Filters.EpicIDs, "filters.epic_ids")
+	if !ok {
+		return issueTableSQL{}, false
+	}
+	if len(epicIDs) > 0 || spec.Filters.IncludeNoEpic {
+		ors := make([]string, 0, 2)
+		if len(epicIDs) > 0 {
+			ors = append(ors, fmt.Sprintf("i.epic_id = ANY(%s::uuid[])", addArg(epicIDs)))
+		}
+		if spec.Filters.IncludeNoEpic {
+			ors = append(ors, "i.epic_id IS NULL")
+		}
+		where = append(where, "("+strings.Join(ors, " OR ")+")")
+	}
+
+	sprintIDs, ok := parseIssueTableUUIDList(w, spec.Filters.SprintIDs, "filters.sprint_ids")
+	if !ok {
+		return issueTableSQL{}, false
+	}
+	if len(sprintIDs) > 0 || spec.Filters.IncludeNoSprint {
+		ors := make([]string, 0, 2)
+		if len(sprintIDs) > 0 {
+			ors = append(ors, fmt.Sprintf("i.sprint_id = ANY(%s::uuid[])", addArg(sprintIDs)))
+		}
+		if spec.Filters.IncludeNoSprint {
+			ors = append(ors, "i.sprint_id IS NULL")
 		}
 		where = append(where, "("+strings.Join(ors, " OR ")+")")
 	}

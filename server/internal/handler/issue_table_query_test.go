@@ -1603,3 +1603,63 @@ func TestIssueTableHierarchyRootKeysetPagination(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueTableQueryEpicAndSprintFilters(t *testing.T) {
+	rawJSON := `{
+		"query": {
+			"scope": {"kind": "workspace"},
+			"filters": {
+				"epic_ids": ["00000000-0000-0000-0000-000000000001"],
+				"include_no_epic": true,
+				"sprint_ids": ["00000000-0000-0000-0000-000000000002"],
+				"include_no_sprint": true
+			},
+			"sort": {"field": "position", "direction": "asc"}
+		},
+		"group": {"kind": "none"},
+		"page": {"limit": 50}
+	}`
+
+	var req issueTableRowsRequest
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/table/rows", strings.NewReader(rawJSON))
+	if !decodeIssueTableJSON(w, r, &req) {
+		t.Fatalf("decode failed: %d %s", w.Code, w.Body.String())
+	}
+
+	if len(req.Query.Filters.EpicIDs) != 1 || req.Query.Filters.EpicIDs[0] != "00000000-0000-0000-0000-000000000001" {
+		t.Fatalf("unexpected EpicIDs: %v", req.Query.Filters.EpicIDs)
+	}
+	if !req.Query.Filters.IncludeNoEpic {
+		t.Fatalf("expected IncludeNoEpic to be true")
+	}
+	if len(req.Query.Filters.SprintIDs) != 1 || req.Query.Filters.SprintIDs[0] != "00000000-0000-0000-0000-000000000002" {
+		t.Fatalf("unexpected SprintIDs: %v", req.Query.Filters.SprintIDs)
+	}
+	if !req.Query.Filters.IncludeNoSprint {
+		t.Fatalf("expected IncludeNoSprint to be true")
+	}
+
+	h := &Handler{}
+	wCompile := httptest.NewRecorder()
+	rCompile := httptest.NewRequest(http.MethodPost, "/api/issues/table/rows", nil)
+	compiled, ok := h.compileIssueTableQuery(wCompile, rCompile, req.Query)
+	if !ok {
+		t.Fatalf("compile failed: %d %s", wCompile.Code, wCompile.Body.String())
+	}
+	if !strings.Contains(compiled.where, "i.epic_id = ANY") || !strings.Contains(compiled.where, "i.epic_id IS NULL") {
+		t.Fatalf("compiled SQL missing epic predicate: %s", compiled.where)
+	}
+	if !strings.Contains(compiled.where, "i.sprint_id = ANY") || !strings.Contains(compiled.where, "i.sprint_id IS NULL") {
+		t.Fatalf("compiled SQL missing sprint predicate: %s", compiled.where)
+	}
+
+	// Verify unknown field rejection is preserved
+	unknownJSON := `{"query":{"scope":{"kind":"workspace"},"filters":{"unknown_field":123},"sort":{"field":"position","direction":"asc"}}}`
+	wBad := httptest.NewRecorder()
+	rBad := httptest.NewRequest(http.MethodPost, "/api/issues/table/rows", strings.NewReader(unknownJSON))
+	var badReq issueTableRowsRequest
+	if decodeIssueTableJSON(wBad, rBad, &badReq) {
+		t.Fatal("expected decodeIssueTableJSON to reject unknown field")
+	}
+}
