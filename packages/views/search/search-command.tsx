@@ -452,6 +452,26 @@ export function SearchCommand() {
           setOpen(false);
         },
       },
+      {
+        key: "new-epic",
+        label: t(($) => $.commands.new_epic),
+        icon: Plus,
+        keywords: ["new", "epic", "create", "add"],
+        onSelect: () => {
+          useModalStore.getState().open("create-epic");
+          setOpen(false);
+        },
+      },
+      {
+        key: "new-sprint",
+        label: t(($) => $.commands.new_sprint),
+        icon: Plus,
+        keywords: ["new", "sprint", "cycle", "create", "add"],
+        onSelect: () => {
+          useModalStore.getState().open("create-sprint");
+          setOpen(false);
+        },
+      },
     ];
 
     if (currentIssueId && currentIssue) {

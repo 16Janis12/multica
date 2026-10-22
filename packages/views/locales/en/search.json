@@ -16,6 +16,8 @@
     "current_theme_aria": "Current theme",
     "new_issue": "New Issue",
     "new_project": "New Project",
+    "new_epic": "New Epic",
+    "new_sprint": "New Sprint",
     "copy_issue_link": "Copy Issue Link",
     "copy_identifier": "Copy Identifier ({{identifier}})",
     "fold_all_comments": "Fold All Comments",

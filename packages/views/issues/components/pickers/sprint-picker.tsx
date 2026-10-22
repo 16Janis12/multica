@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { UpdateIssueRequest } from "@multica/core/types";
+import type { Sprint, UpdateIssueRequest } from "@multica/core/types";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { sprintListOptions } from "@multica/core/sprints";
+import { sprintListOptions, useCreateSprint } from "@multica/core/sprints";
+import { useModalStore } from "@multica/core/modals";
+import { toast } from "sonner";
 import { DeferredPopup } from "../../../common/deferred-popup";
 import {
   PropertyPicker,
@@ -13,7 +15,7 @@ import {
   PickerEmpty,
   PICKER_TRIGGER_CLASS,
 } from "./property-picker";
-import { Zap, X } from "lucide-react";
+import { Zap, Plus, X } from "lucide-react";
 
 interface SprintPickerProps {
   sprintId: string | null;
@@ -67,6 +69,7 @@ function SprintPickerImpl({
   const [search, setSearch] = useState("");
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
+  const createSprint = useCreateSprint();
 
   const { data: sprints = [] } = useQuery(
     sprintListOptions(wsId, projectId ? { project_id: projectId } : undefined),
@@ -99,6 +102,11 @@ function SprintPickerImpl({
     () => filteredSprints.filter((s) => s.status !== "active" && s.status !== "planned"),
     [filteredSprints],
   );
+
+  const trimmedQuery = search.trim();
+  const canCreate =
+    !!trimmedQuery &&
+    !sprints.some((s) => s.name.toLowerCase() === trimmedQuery.toLowerCase());
 
   return (
     <PropertyPicker
@@ -151,87 +159,121 @@ function SprintPickerImpl({
         </span>
       </PickerItem>
 
-      {filteredSprints.length === 0 && search.trim() ? (
-        <PickerEmpty />
-      ) : (
-        <>
-          {activeSprints.length > 0 && (
-            <PickerSection label="Active Sprint">
-              {activeSprints.map((sprint) => (
-                <PickerItem
-                  key={sprint.id}
-                  selected={sprint.id === sprintId}
-                  onClick={() => {
-                    onUpdate({ sprint_id: sprint.id });
-                    setOpen(false);
-                  }}
-                >
-                  <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                    <span className="truncate text-pretty text-xs font-medium">
-                      {sprint.name}
-                    </span>
-                    {sprint.end_date && (
-                      <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0">
-                        Ends {sprint.end_date.slice(5)}
-                      </span>
-                    )}
-                  </div>
-                </PickerItem>
-              ))}
-            </PickerSection>
-          )}
+      {filteredSprints.length === 0 && !canCreate && <PickerEmpty />}
 
-          {plannedSprints.length > 0 && (
-            <PickerSection label="Upcoming">
-              {plannedSprints.map((sprint) => (
-                <PickerItem
-                  key={sprint.id}
-                  selected={sprint.id === sprintId}
-                  onClick={() => {
-                    onUpdate({ sprint_id: sprint.id });
-                    setOpen(false);
-                  }}
-                >
-                  <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                    <span className="truncate text-pretty text-xs">
-                      {sprint.name}
-                    </span>
-                    {sprint.start_date && (
-                      <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0">
-                        {sprint.start_date.slice(5)}
-                      </span>
-                    )}
-                  </div>
-                </PickerItem>
-              ))}
-            </PickerSection>
-          )}
-
-          {otherSprints.length > 0 && (
-            <PickerSection label="Past">
-              {otherSprints.map((sprint) => (
-                <PickerItem
-                  key={sprint.id}
-                  selected={sprint.id === sprintId}
-                  onClick={() => {
-                    onUpdate({ sprint_id: sprint.id });
-                    setOpen(false);
-                  }}
-                >
-                  <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                    <span className="truncate text-pretty text-xs text-muted-foreground">
-                      {sprint.name}
-                    </span>
-                    <span className="text-[10px] uppercase font-mono tabular-nums text-muted-foreground shrink-0">
-                      {sprint.status}
-                    </span>
-                  </div>
-                </PickerItem>
-              ))}
-            </PickerSection>
-          )}
-        </>
+      {activeSprints.length > 0 && (
+        <PickerSection label="Active Sprint">
+          {activeSprints.map((sprint) => (
+            <PickerItem
+              key={sprint.id}
+              selected={sprint.id === sprintId}
+              onClick={() => {
+                onUpdate({ sprint_id: sprint.id });
+                setOpen(false);
+              }}
+            >
+              <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                <span className="truncate text-pretty text-xs font-medium">
+                  {sprint.name}
+                </span>
+                {sprint.end_date && (
+                  <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0">
+                    Ends {sprint.end_date.slice(5)}
+                  </span>
+                )}
+              </div>
+            </PickerItem>
+          ))}
+        </PickerSection>
       )}
+
+      {plannedSprints.length > 0 && (
+        <PickerSection label="Upcoming">
+          {plannedSprints.map((sprint) => (
+            <PickerItem
+              key={sprint.id}
+              selected={sprint.id === sprintId}
+              onClick={() => {
+                onUpdate({ sprint_id: sprint.id });
+                setOpen(false);
+              }}
+            >
+              <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                <span className="truncate text-pretty text-xs">
+                  {sprint.name}
+                </span>
+                {sprint.start_date && (
+                  <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0">
+                    {sprint.start_date.slice(5)}
+                  </span>
+                )}
+              </div>
+            </PickerItem>
+          ))}
+        </PickerSection>
+      )}
+
+      {otherSprints.length > 0 && (
+        <PickerSection label="Past">
+          {otherSprints.map((sprint) => (
+            <PickerItem
+              key={sprint.id}
+              selected={sprint.id === sprintId}
+              onClick={() => {
+                onUpdate({ sprint_id: sprint.id });
+                setOpen(false);
+              }}
+            >
+              <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                <span className="truncate text-pretty text-xs text-muted-foreground">
+                  {sprint.name}
+                </span>
+                <span className="text-[10px] uppercase font-mono tabular-nums text-muted-foreground shrink-0">
+                  {sprint.status}
+                </span>
+              </div>
+            </PickerItem>
+          ))}
+        </PickerSection>
+      )}
+
+      {canCreate && (
+        <PickerItem
+          selected={false}
+          onClick={async () => {
+            try {
+              const sprint = await createSprint.mutateAsync({
+                name: trimmedQuery,
+                project_id: projectId || undefined,
+              });
+              onUpdate({ sprint_id: sprint.id });
+              setOpen(false);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Failed to create sprint");
+            }
+          }}
+        >
+          <Plus className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            Create <span className="font-medium">&ldquo;{trimmedQuery}&rdquo;</span>
+          </span>
+        </PickerItem>
+      )}
+
+      <PickerItem
+        selected={false}
+        onClick={() => {
+          setOpen(false);
+          useModalStore.getState().open("create-sprint", {
+            name: trimmedQuery,
+            projectId,
+            onSuccess: (sprint: Sprint) => onUpdate({ sprint_id: sprint.id }),
+          });
+        }}
+      >
+        <Plus className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">New sprint…</span>
+      </PickerItem>
     </PropertyPicker>
   );
 }

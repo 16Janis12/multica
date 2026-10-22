@@ -13,6 +13,7 @@ import {
   FolderKanban,
   FolderMinus,
   List,
+  Plus,
   Rows3,
   SignalHigh,
   SlidersHorizontal,
@@ -71,6 +72,7 @@ import { labelListOptions } from "@multica/core/labels/queries";
 import { propertyListOptions } from "@multica/core/properties";
 import { epicListOptions } from "@multica/core/epics";
 import { sprintListOptions } from "@multica/core/sprints";
+import { useModalStore } from "@multica/core/modals";
 import { propertyIdFromViewKey } from "@multica/core/issues/stores/view-store";
 import type {
   Issue,
@@ -644,6 +646,19 @@ function EpicSubContent({
           </div>
         )}
       </div>
+
+      <div className="p-1 border-t border-border/50">
+        <button
+          type="button"
+          onClick={() => {
+            useModalStore.getState().open("create-epic", { title: search.trim() });
+          }}
+          className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        >
+          <Plus className="size-3.5 shrink-0" />
+          <span>New epic…</span>
+        </button>
+      </div>
     </>
   );
 }
@@ -669,6 +684,8 @@ export function SprintSelector({
 
   const activeSprints = useMemo(() => sprints.filter((s) => s.status === "active"), [sprints]);
   const upcomingSprints = useMemo(() => sprints.filter((s) => s.status === "planned"), [sprints]);
+
+  const isFiltered = sprintFilters.length > 0 || includeNoSprint;
 
   const selectedLabel = useMemo(() => {
     if (includeNoSprint) return "Backlog";
@@ -705,20 +722,27 @@ export function SprintSelector({
         role="combobox"
         aria-label="Select sprint"
         aria-expanded={open}
-        className={`inline-flex items-center justify-between gap-1.5 rounded-md border border-input bg-background/80 px-2.5 py-1.5 text-xs font-medium min-h-[44px] hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors shrink-0 ${className ?? ""}`}
+        className={`inline-flex items-center justify-between gap-1.5 rounded-md border border-input bg-background/80 px-2.5 h-8 md:h-7 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors shrink-0 ${
+          isFiltered ? "text-foreground" : "text-muted-foreground"
+        } ${className ?? ""}`}
       >
         <div className="flex items-center gap-1.5 min-w-0">
-          <Zap className="size-3.5 shrink-0 text-emerald-500 fill-emerald-500" aria-hidden="true" />
+          <Zap
+            className={`size-3.5 shrink-0 ${
+              isFiltered ? "text-emerald-500 fill-emerald-500" : "text-muted-foreground"
+            }`}
+            aria-hidden="true"
+          />
           <span className="truncate max-w-[130px] font-mono tabular-nums">{selectedLabel}</span>
         </div>
         <ChevronDown className="size-3 shrink-0 opacity-50" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-1">
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <button
             type="button"
             onClick={selectAll}
-            className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+            className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               sprintFilters.length === 0 && !includeNoSprint ? "bg-accent/60 font-semibold" : ""
             }`}
           >
@@ -737,7 +761,7 @@ export function SprintSelector({
                     key={s.id}
                     type="button"
                     onClick={() => selectSprint(s.id)}
-                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+                    className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       isSelected ? "bg-accent/60 font-semibold text-emerald-600 dark:text-emerald-400" : ""
                     }`}
                   >
@@ -768,7 +792,7 @@ export function SprintSelector({
                     key={s.id}
                     type="button"
                     onClick={() => selectSprint(s.id)}
-                    className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+                    className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       isSelected ? "bg-accent/60 font-semibold" : ""
                     }`}
                   >
@@ -790,7 +814,7 @@ export function SprintSelector({
             <button
               type="button"
               onClick={selectBacklog}
-              className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[44px] ${
+              className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 includeNoSprint ? "bg-accent/60 font-semibold" : ""
               }`}
             >
@@ -798,6 +822,169 @@ export function SprintSelector({
               <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
                 No sprint
               </span>
+            </button>
+          </div>
+
+          <div className="pt-1 border-t border-border/50">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                useModalStore.getState().open("create-sprint", { projectId });
+              }}
+              className="flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Plus className="size-3.5 shrink-0" />
+              <span>New sprint…</span>
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function EpicSelector({
+  projectId,
+  className,
+}: {
+  projectId?: string;
+  className?: string;
+}) {
+  const wsId = useWorkspaceId();
+  const [open, setOpen] = useState(false);
+  const epicFilters = useViewStore((s) => s.epicFilters);
+  const includeNoEpic = useViewStore((s) => s.includeNoEpic);
+  const toggleEpicFilter = useViewStore((s) => s.toggleEpicFilter);
+  const toggleNoEpic = useViewStore((s) => s.toggleNoEpic);
+  const clearFilterDimension = useViewStore((s) => s.clearFilterDimension);
+
+  const { data: epics = [] } = useQuery(
+    epicListOptions(wsId, projectId ? { project_id: projectId } : undefined),
+  );
+
+  const isFiltered = epicFilters.length > 0 || includeNoEpic;
+
+  const selectedLabel = useMemo(() => {
+    if (includeNoEpic) return "No Epic";
+    if (epicFilters.length === 0) return "All Epics";
+    if (epicFilters.length === 1) {
+      const match = epics.find((e) => e.id === epicFilters[0]);
+      return match ? match.title : "1 Epic";
+    }
+    return `${epicFilters.length} Epics`;
+  }, [includeNoEpic, epicFilters, epics]);
+
+  const selectAll = () => {
+    clearFilterDimension("epic");
+    setOpen(false);
+  };
+
+  const selectNoEpic = () => {
+    if (!includeNoEpic) {
+      if (epicFilters.length > 0) clearFilterDimension("epic");
+      toggleNoEpic();
+    }
+    setOpen(false);
+  };
+
+  const selectEpic = (id: string) => {
+    if (includeNoEpic) toggleNoEpic();
+    toggleEpicFilter(id);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        role="combobox"
+        aria-label="Select epic"
+        aria-expanded={open}
+        className={`inline-flex items-center justify-between gap-1.5 rounded-md border border-input bg-background/80 px-2.5 h-8 md:h-7 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors shrink-0 ${
+          isFiltered ? "text-foreground" : "text-muted-foreground"
+        } ${className ?? ""}`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Bookmark
+            className={`size-3.5 shrink-0 ${
+              isFiltered ? "text-brand fill-brand" : "text-muted-foreground"
+            }`}
+            aria-hidden="true"
+          />
+          <span className="truncate max-w-[130px] font-mono tabular-nums">{selectedLabel}</span>
+        </div>
+        <ChevronDown className="size-3 shrink-0 opacity-50" aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1">
+        <div className="space-y-0.5">
+          <button
+            type="button"
+            onClick={selectAll}
+            className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              epicFilters.length === 0 && !includeNoEpic ? "bg-accent/60 font-semibold" : ""
+            }`}
+          >
+            <span>All Epics</span>
+          </button>
+
+          {epics.length > 0 && (
+            <div className="pt-1 border-t border-border/50 max-h-48 overflow-y-auto">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Epics
+              </div>
+              {epics.map((e) => {
+                const isSelected = epicFilters.includes(e.id);
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => selectEpic(e.id)}
+                    className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      isSelected ? "bg-accent/60 font-semibold text-brand" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className="size-2 rounded-full shrink-0"
+                        style={{ backgroundColor: e.color || "#8b5cf6" }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate text-pretty">{e.title}</span>
+                    </div>
+                    {e.identifier && (
+                      <span className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0 ml-1 uppercase">
+                        {e.identifier}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="pt-1 border-t border-border/50">
+            <button
+              type="button"
+              onClick={selectNoEpic}
+              className={`flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                includeNoEpic ? "bg-accent/60 font-semibold" : ""
+              }`}
+            >
+              <span>No Epic</span>
+            </button>
+          </div>
+
+          <div className="pt-1 border-t border-border/50">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                useModalStore.getState().open("create-epic", { projectId });
+              }}
+              className="flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Plus className="size-3.5 shrink-0" />
+              <span>New epic…</span>
             </button>
           </div>
         </div>
@@ -1670,6 +1857,7 @@ export function IssuesHeader({
 
         <div className="flex shrink-0 items-center gap-1">
           <SprintSelector />
+          <EpicSelector />
           {agentRunningFilter && (
             <span className="mr-1 hidden text-caption text-muted-foreground md:inline">
               {t(($) => $.agent_activity.filter_active_label)}

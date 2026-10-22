@@ -16,6 +16,8 @@
     "current_theme_aria": "現在のテーマ",
     "new_issue": "新規タスク",
     "new_project": "新規プロジェクト",
+    "new_epic": "新規エピック",
+    "new_sprint": "新規スプリント",
     "copy_issue_link": "タスクのリンクをコピー",
     "copy_identifier": "識別子をコピー ({{identifier}})",
     "fold_all_comments": "すべてのコメントを折りたたむ",

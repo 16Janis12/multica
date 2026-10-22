@@ -16,6 +16,8 @@
     "current_theme_aria": "当前主题",
     "new_issue": "新建任务",
     "new_project": "新建项目",
+    "new_epic": "新建史诗",
+    "new_sprint": "新建冲刺",
     "copy_issue_link": "复制任务链接",
     "copy_identifier": "复制标识符 ({{identifier}})",
     "fold_all_comments": "收起全部评论",

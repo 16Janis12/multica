@@ -16,6 +16,8 @@
     "current_theme_aria": "현재 테마",
     "new_issue": "새 태스크",
     "new_project": "새 프로젝트",
+    "new_epic": "새 에픽",
+    "new_sprint": "새 스프린트",
     "copy_issue_link": "태스크 링크 복사",
     "copy_identifier": "식별자 복사 ({{identifier}})",
     "fold_all_comments": "모든 댓글 접기",

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { UpdateIssueRequest } from "@multica/core/types";
+import type { Epic, UpdateIssueRequest } from "@multica/core/types";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { epicListOptions } from "@multica/core/epics";
+import { epicListOptions, useCreateEpic } from "@multica/core/epics";
+import { useModalStore } from "@multica/core/modals";
+import { toast } from "sonner";
 import { DeferredPopup } from "../../../common/deferred-popup";
 import {
   PropertyPicker,
@@ -12,7 +14,7 @@ import {
   PickerEmpty,
   PICKER_TRIGGER_CLASS,
 } from "./property-picker";
-import { Bookmark, X } from "lucide-react";
+import { Bookmark, Plus, X } from "lucide-react";
 
 interface EpicPickerProps {
   epicId: string | null;
@@ -66,6 +68,7 @@ function EpicPickerImpl({
   const [search, setSearch] = useState("");
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
+  const createEpic = useCreateEpic();
 
   const { data: epics = [] } = useQuery(
     epicListOptions(wsId, projectId ? { project_id: projectId } : undefined),
@@ -85,6 +88,11 @@ function EpicPickerImpl({
         (e.identifier && e.identifier.toLowerCase().includes(q)),
     );
   }, [epics, search]);
+
+  const trimmedQuery = search.trim();
+  const canCreate =
+    !!trimmedQuery &&
+    !epics.some((e) => e.title.toLowerCase() === trimmedQuery.toLowerCase());
 
   return (
     <PropertyPicker
@@ -134,39 +142,76 @@ function EpicPickerImpl({
         </span>
       </PickerItem>
 
-      {filteredEpics.length === 0 && search.trim() ? (
-        <PickerEmpty />
-      ) : (
-        filteredEpics.map((epic) => (
-          <PickerItem
-            key={epic.id}
-            selected={epic.id === epicId}
-            onClick={() => {
+      {filteredEpics.length === 0 && !canCreate && <PickerEmpty />}
+
+      {filteredEpics.map((epic) => (
+        <PickerItem
+          key={epic.id}
+          selected={epic.id === epicId}
+          onClick={() => {
+            onUpdate({ epic_id: epic.id });
+            setOpen(false);
+          }}
+        >
+          <div className="flex items-center justify-between w-full min-w-0 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: epic.color || "#8b5cf6" }}
+                aria-hidden="true"
+              />
+              <span className="truncate text-pretty text-xs">{epic.title}</span>
+            </div>
+            {epic.identifier && (
+              <span
+                translate="no"
+                className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0 uppercase"
+              >
+                {epic.identifier}
+              </span>
+            )}
+          </div>
+        </PickerItem>
+      ))}
+
+      {canCreate && (
+        <PickerItem
+          selected={false}
+          onClick={async () => {
+            try {
+              const epic = await createEpic.mutateAsync({
+                title: trimmedQuery,
+                project_id: projectId || undefined,
+                color: "#6366f1",
+              });
               onUpdate({ epic_id: epic.id });
               setOpen(false);
-            }}
-          >
-            <div className="flex items-center justify-between w-full min-w-0 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: epic.color || "#8b5cf6" }}
-                  aria-hidden="true"
-                />
-                <span className="truncate text-pretty text-xs">{epic.title}</span>
-              </div>
-              {epic.identifier && (
-                <span
-                  translate="no"
-                  className="text-[10px] font-mono tabular-nums text-muted-foreground shrink-0 uppercase"
-                >
-                  {epic.identifier}
-                </span>
-              )}
-            </div>
-          </PickerItem>
-        ))
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Failed to create epic");
+            }
+          }}
+        >
+          <Plus className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            Create <span className="font-medium">&ldquo;{trimmedQuery}&rdquo;</span>
+          </span>
+        </PickerItem>
       )}
+
+      <PickerItem
+        selected={false}
+        onClick={() => {
+          setOpen(false);
+          useModalStore.getState().open("create-epic", {
+            title: trimmedQuery,
+            projectId,
+            onSuccess: (epic: Epic) => onUpdate({ epic_id: epic.id }),
+          });
+        }}
+      >
+        <Plus className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">New epic…</span>
+      </PickerItem>
     </PropertyPicker>
   );
 }

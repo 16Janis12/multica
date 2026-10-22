@@ -16,6 +16,8 @@
     "current_theme_aria": "Thème actuel",
     "new_issue": "Nouvelle tâche",
     "new_project": "Nouveau projet",
+    "new_epic": "Nouvel epic",
+    "new_sprint": "Nouveau sprint",
     "copy_issue_link": "Copier le lien de la tâche",
     "copy_identifier": "Copier l'identifiant ({{identifier}})",
     "fold_all_comments": "Replier tous les commentaires",
