@@ -72,6 +72,8 @@ type UserResponse struct {
 	OnboardedAt             *string         `json:"onboarded_at"`
 	OnboardingQuestionnaire json.RawMessage `json:"onboarding_questionnaire"`
 	ProfileDescription      string          `json:"profile_description"`
+	SystemRole              string          `json:"system_role"`
+	IsSuspended             bool            `json:"is_suspended"`
 	CreatedAt               string          `json:"created_at"`
 	UpdatedAt               string          `json:"updated_at"`
 }
@@ -100,6 +102,8 @@ func (h *Handler) userToResponse(u db.User) UserResponse {
 		OnboardedAt:             timestampToPtr(u.OnboardedAt),
 		OnboardingQuestionnaire: json.RawMessage(q),
 		ProfileDescription:      u.ProfileDescription,
+		SystemRole:              u.SystemRole,
+		IsSuspended:             u.IsSuspended,
 		CreatedAt:               timestampToString(u.CreatedAt),
 		UpdatedAt:               timestampToString(u.UpdatedAt),
 	}
@@ -204,19 +208,52 @@ func (h *Handler) findOrCreateUser(ctx context.Context, email string) (user db.U
 	}
 
 	if !isNew {
+		if user.IsSuspended {
+			return db.User{}, false, errors.New("account is suspended")
+		}
 		return user, false, nil
+	}
+
+	totalUsers, _ := h.Queries.CountTotalUsers(ctx)
+	systemRole := "standard"
+	if totalUsers == 0 {
+		systemRole = "instance_owner"
+	}
+
+	inv, invErr := h.Queries.GetActiveInstanceInvitationByEmail(ctx, email)
+	if invErr == nil {
+		if inv.SystemRole == "instance_admin" {
+			systemRole = "instance_admin"
+		}
 	}
 
 	name := email
 	if at := strings.Index(email, "@"); at > 0 {
 		name = email[:at]
 	}
-	created, err := h.Queries.CreateUser(ctx, db.CreateUserParams{
-		Name:  name,
-		Email: email,
+	created, err := h.Queries.CreateUserWithRole(ctx, db.CreateUserWithRoleParams{
+		Name:       name,
+		Email:      email,
+		AvatarUrl:  pgtype.Text{},
+		SystemRole: systemRole,
 	})
 	if err != nil {
 		return db.User{}, false, err
+	}
+
+	if invErr == nil {
+		_, _ = h.Queries.MarkInstanceInvitationAccepted(ctx, inv.ID)
+		if inv.DefaultWorkspaceID.Valid {
+			role := "member"
+			if inv.DefaultWorkspaceRole.Valid && inv.DefaultWorkspaceRole.String != "" {
+				role = inv.DefaultWorkspaceRole.String
+			}
+			_, _ = h.Queries.CreateMember(ctx, db.CreateMemberParams{
+				WorkspaceID: inv.DefaultWorkspaceID,
+				UserID:      created.ID,
+				Role:        role,
+			})
+		}
 	}
 	return created, true, nil
 }
@@ -255,39 +292,48 @@ func (h *Handler) checkSignupAllowed(ctx context.Context, email string, isNewUse
 		return nil // existing users always allowed to log in
 	}
 
+	totalUsers, _ := h.Queries.CountTotalUsers(ctx)
+	if totalUsers == 0 {
+		return nil
+	}
+
 	email = strings.ToLower(email)
 	domain := ""
 	if at := strings.Index(email, "@"); at > 0 {
 		domain = email[at+1:]
 	}
 
-	// 1. explicit email allowlist always wins
-	if len(h.cfg.AllowedEmails) > 0 && contains(h.cfg.AllowedEmails, email) {
+	hasInstanceInvite, _ := h.Queries.HasActiveInstanceInvitationForEmail(ctx, email)
+	if hasInstanceInvite {
 		return nil
 	}
 
-	// 2. domain allowlist always wins
+	signupPolicy, allowedDomains := h.getSignupPolicy(ctx)
+
+	if len(allowedDomains) > 0 && contains(allowedDomains, domain) {
+		return nil
+	}
+
+	if len(h.cfg.AllowedEmails) > 0 && contains(h.cfg.AllowedEmails, email) {
+		return nil
+	}
 	if len(h.cfg.AllowedEmailDomains) > 0 && contains(h.cfg.AllowedEmailDomains, domain) {
 		return nil
 	}
 
-	// 3. unrestricted signup needs no invitation lookup.
-	if h.cfg.AllowSignup && len(h.cfg.AllowedEmailDomains) == 0 && len(h.cfg.AllowedEmails) == 0 {
+	if signupPolicy == "open" && len(allowedDomains) == 0 && len(h.cfg.AllowedEmailDomains) == 0 && len(h.cfg.AllowedEmails) == 0 {
 		return nil
 	}
 
-	// 4. A live invitation is an implicit per-email signup allowance. This
-	// also permits invited emails outside configured allowlists, regardless
-	// of ALLOW_SIGNUP. Recheck at account creation in findOrCreateUser.
-	invited, err := h.Queries.HasPendingInvitationForEmail(ctx, email)
-	if err != nil {
-		return fmt.Errorf("check pending invitation for signup: %w", err)
-	}
-	if invited {
-		return nil
+	invitationAuthority := h.getInvitationAuthority(ctx)
+	if invitationAuthority != "admins_only" {
+		invited, err := h.Queries.HasPendingInvitationForEmail(ctx, email)
+		if err == nil && invited {
+			return nil
+		}
 	}
 
-	if !h.cfg.AllowSignup {
+	if signupPolicy == "invite_only" || !h.cfg.AllowSignup {
 		return ErrSignupProhibited
 	}
 	return ErrEmailNotAllowed
@@ -495,6 +541,10 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load user")
+		return
+	}
+	if user.IsSuspended {
+		writeError(w, http.StatusForbidden, "account is suspended")
 		return
 	}
 

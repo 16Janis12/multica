@@ -5521,4 +5521,131 @@ export class ApiClient {
       { endpoint: "POST /api/telegram/binding/redeem" },
     );
   }
+
+  // --- Instance Administration ---
+
+  async getAdminVitals(): Promise<{
+    server_version: string;
+    total_users: number;
+    total_workspaces: number;
+    signup_policy: string;
+    invitation_authority: string;
+    workspace_creation_policy: string;
+    enforce_worktree: boolean;
+  }> {
+    return this.fetch("/api/admin/vitals");
+  }
+
+  async listAdminSettings(): Promise<
+    Array<{ key: string; value: unknown; description?: string; updated_at: string }>
+  > {
+    return this.fetch("/api/admin/settings");
+  }
+
+  async updateAdminSetting(key: string, value: unknown): Promise<unknown> {
+    return this.fetch(`/api/admin/settings/${key}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  async listAdminUsers(): Promise<User[]> {
+    return this.fetch("/api/admin/users");
+  }
+
+  async updateAdminUserStatus(
+    userId: string,
+    payload: { system_role?: string; is_suspended?: boolean; suspension_reason?: string },
+  ): Promise<User> {
+    return this.fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async listAdminWorkspaces(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      slug: string;
+      description?: string;
+      member_count: number;
+      agent_count: number;
+      owner_name: string;
+      owner_email: string;
+      created_at: string;
+    }>
+  > {
+    return this.fetch("/api/admin/workspaces");
+  }
+
+  async transferWorkspaceOwnership(
+    workspaceId: string,
+    newOwnerUserId: string,
+  ): Promise<{ status: string }> {
+    return this.fetch(`/api/admin/workspaces/${workspaceId}/transfer`, {
+      method: "POST",
+      body: JSON.stringify({ new_owner_user_id: newOwnerUserId }),
+    });
+  }
+
+  async listInstanceInvitations(): Promise<
+    Array<{
+      id: string;
+      email: string;
+      system_role: string;
+      default_workspace_id?: string;
+      default_workspace_role?: string;
+      inviter_name: string;
+      inviter_email: string;
+      expires_at: string;
+      accepted_at?: string;
+      revoked_at?: string;
+      created_at: string;
+    }>
+  > {
+    return this.fetch("/api/admin/invitations");
+  }
+
+  async createInstanceInvitation(payload: {
+    email: string;
+    system_role?: string;
+    default_workspace_id?: string;
+    default_workspace_role?: string;
+    expires_in_days?: number;
+  }): Promise<{
+    invitation: unknown;
+    token: string;
+    invite_url: string;
+  }> {
+    return this.fetch("/api/admin/invitations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async revokeInstanceInvitation(invitationId: string): Promise<unknown> {
+    return this.fetch(`/api/admin/invitations/${invitationId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async listAdminAuditLogs(params?: { limit?: number; offset?: number }): Promise<
+    Array<{
+      id: string;
+      actor_id?: string;
+      actor_name?: string;
+      actor_email?: string;
+      action: string;
+      target_type: string;
+      target_id: string;
+      changes: unknown;
+      created_at: string;
+    }>
+  > {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    return this.fetch(`/api/admin/audit-logs?${search.toString()}`);
+  }
 }
