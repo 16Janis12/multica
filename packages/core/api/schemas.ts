@@ -2694,6 +2694,8 @@ export const UserSchema = z.object({
   language: z.string().nullable().default(null),
   profile_description: z.string().default(""),
   timezone: z.string().nullable().default(null),
+  system_role: z.enum(["instance_owner", "instance_admin", "standard"]).default("standard"),
+  is_suspended: z.boolean().default(false),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 }).loose();
@@ -2708,6 +2710,8 @@ export const EMPTY_USER: User = {
   language: null,
   profile_description: "",
   timezone: null,
+  system_role: "standard",
+  is_suspended: false,
   created_at: "",
   updated_at: "",
 };

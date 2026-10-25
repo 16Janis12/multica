@@ -17,6 +17,7 @@ import {
   Plug,
   Search,
   Server,
+  Shield,
   Settings,
   SlidersHorizontal,
   Tags,
@@ -58,6 +59,7 @@ import { QuickActionsTab } from "./quick-actions-tab";
 import { KeyboardShortcutsTab } from "./keyboard-shortcuts-tab";
 import { PluginsTab } from "./plugins-tab";
 import { McpTab } from "./mcp-tab";
+import { AdminTab } from "./admin-tab";
 import { BillingTab } from "./billing-tab";
 import { SETTINGS_ANCHOR_ATTR } from "./settings-layout";
 import { searchSettings } from "./settings-search";
@@ -92,7 +94,7 @@ interface SettingsSubgroup {
 }
 
 interface SettingsScopeGroup {
-  key: "personal" | "workspace" | "device";
+  key: "personal" | "workspace" | "device" | "instance";
   label: string;
   /** Leading mark: whose settings these are. */
   mark: React.ReactNode;
@@ -171,6 +173,30 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
         },
       ],
     },
+    ...(((user?.system_role === "instance_owner" || user?.system_role === "instance_admin"))
+      ? [
+          {
+            key: "instance" as const,
+            label: "Instance Admin",
+            mark: <Shield className="size-4 text-indigo-400" />,
+            tag: "Platform",
+            subgroups: [
+              {
+                key: "instance",
+                entries: [
+                  entry(
+                    "instance",
+                    "Governance & Access",
+                    Shield,
+                    <AdminTab />,
+                    { wide: true },
+                  ),
+                ],
+              },
+            ],
+          },
+        ]
+      : []),
     {
       key: "workspace",
       label: workspaceName,

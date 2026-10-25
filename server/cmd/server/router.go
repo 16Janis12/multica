@@ -1692,6 +1692,23 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		// a fresh URL; the workspace-scoped metadata route stays unchanged.
 		r.Get("/api/attachments/{id}/download-metadata", h.GetAttachmentForDownload)
 
+		// Instance Administration (admin-only)
+		r.Route("/api/admin", func(r chi.Router) {
+			r.Use(middleware.RequireInstanceAdmin(queries))
+			r.Get("/vitals", h.GetSystemVitals)
+			r.Get("/settings", h.ListSystemSettings)
+			r.Put("/settings/{key}", h.UpdateSystemSetting)
+			r.Patch("/settings/{key}", h.UpdateSystemSetting)
+			r.Get("/users", h.ListUsersForAdmin)
+			r.Patch("/users/{id}", h.UpdateUserStatus)
+			r.Get("/workspaces", h.ListWorkspacesForAdmin)
+			r.Post("/workspaces/{id}/transfer", h.TransferWorkspaceOwnership)
+			r.Get("/invitations", h.ListInstanceInvitations)
+			r.Post("/invitations", h.CreateInstanceInvitation)
+			r.Delete("/invitations/{id}", h.RevokeInstanceInvitation)
+			r.Get("/audit-logs", h.ListSystemAuditLogs)
+		})
+
 		r.Route("/api/workspaces", func(r chi.Router) {
 			r.Get("/", h.ListWorkspaces)
 			r.Post("/", h.CreateWorkspace)

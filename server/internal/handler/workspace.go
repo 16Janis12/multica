@@ -205,14 +205,18 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Self-host gate (#3433): when the operator has set
-	// DISABLE_WORKSPACE_CREATION=true, no caller — including existing
-	// workspace owners — may create additional workspaces. The frontend
-	// hides every "Create workspace" affordance via /api/config, but the
-	// 403 here is the only authoritative check.
-	if h.cfg.DisableWorkspaceCreation {
+	// Self-host gate: check dynamic policy or fallback to static DISABLE_WORKSPACE_CREATION
+	creationPolicy := h.getWorkspaceCreationPolicy(r.Context())
+	if creationPolicy == "disabled" {
 		writeError(w, http.StatusForbidden, "workspace creation is disabled for this instance")
 		return
+	}
+	if creationPolicy == "admins_only" {
+		user, err := h.Queries.GetUser(r.Context(), parseUUID(userID))
+		if err != nil || (user.SystemRole != "instance_owner" && user.SystemRole != "instance_admin") {
+			writeError(w, http.StatusForbidden, "only instance administrators are permitted to create workspaces")
+			return
+		}
 	}
 
 	var req CreateWorkspaceRequest

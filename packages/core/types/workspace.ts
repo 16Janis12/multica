@@ -53,6 +53,8 @@ export interface Member {
   created_at: string;
 }
 
+export type SystemRole = "instance_owner" | "instance_admin" | "standard";
+
 export interface User {
   id: string;
   name: string;
@@ -77,6 +79,8 @@ export interface User {
   profile_description: string;
   /** Pinned IANA tz; null means "use browser-detected tz at render time". */
   timezone: string | null;
+  system_role?: SystemRole;
+  is_suspended?: boolean;
   created_at: string;
   updated_at: string;
 }

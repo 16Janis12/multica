@@ -34,6 +34,9 @@ type AppConfig struct {
 	// from the JSON when false to keep responses identical to the
 	// previous shape for the common managed-cloud case (#3433).
 	WorkspaceCreationDisabled bool `json:"workspace_creation_disabled,omitempty"`
+	WorkspaceCreationPolicy   string `json:"workspace_creation_policy,omitempty"`
+	SignupPolicy              string `json:"signup_policy,omitempty"`
+	InvitationAuthority       string `json:"invitation_authority,omitempty"`
 	// Public daemon setup config consumed by the web app at runtime so
 	// self-hosted instances can show `multica setup self-host` commands
 	// with the operator's own domains instead of Multica Cloud defaults.
@@ -120,6 +123,14 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		AllowSignup:                        os.Getenv("ALLOW_SIGNUP") != "false",
 		GoogleClientID:                     os.Getenv("GOOGLE_CLIENT_ID"),
 		WorkspaceCreationDisabled:          os.Getenv("DISABLE_WORKSPACE_CREATION") == "true",
+	}
+	creationPolicy := h.getWorkspaceCreationPolicy(r.Context())
+	signupPolicy, _ := h.getSignupPolicy(r.Context())
+	config.WorkspaceCreationPolicy = creationPolicy
+	config.SignupPolicy = signupPolicy
+	config.InvitationAuthority = h.getInvitationAuthority(r.Context())
+	if creationPolicy == "disabled" {
+		config.WorkspaceCreationDisabled = true
 	}
 	if h.Storage != nil {
 		config.CdnDomain = h.Storage.CdnDomain()
