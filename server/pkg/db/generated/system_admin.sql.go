@@ -133,7 +133,7 @@ func (q *Queries) CreateSystemAuditLog(ctx context.Context, arg CreateSystemAudi
 const createUserWithRole = `-- name: CreateUserWithRole :one
 INSERT INTO "user" (name, email, avatar_url, system_role)
 VALUES ($1, $2, $3, $4)
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, system_role, is_suspended, suspended_at, suspension_reason
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, system_role, is_suspended, suspended_at, suspension_reason, whats_new_seen_version
 `
 
 type CreateUserWithRoleParams struct {
@@ -170,6 +170,7 @@ func (q *Queries) CreateUserWithRole(ctx context.Context, arg CreateUserWithRole
 		&i.IsSuspended,
 		&i.SuspendedAt,
 		&i.SuspensionReason,
+		&i.WhatsNewSeenVersion,
 	)
 	return i, err
 }
@@ -582,7 +583,7 @@ UPDATE "user" SET
     suspension_reason = $3,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, system_role, is_suspended, suspended_at, suspension_reason
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, system_role, is_suspended, suspended_at, suspension_reason, whats_new_seen_version
 `
 
 type SetUserSuspensionParams struct {
@@ -613,6 +614,7 @@ func (q *Queries) SetUserSuspension(ctx context.Context, arg SetUserSuspensionPa
 		&i.IsSuspended,
 		&i.SuspendedAt,
 		&i.SuspensionReason,
+		&i.WhatsNewSeenVersion,
 	)
 	return i, err
 }
@@ -622,7 +624,7 @@ UPDATE "user" SET
     system_role = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, system_role, is_suspended, suspended_at, suspension_reason
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, system_role, is_suspended, suspended_at, suspension_reason, whats_new_seen_version
 `
 
 type UpdateUserSystemRoleParams struct {
@@ -652,6 +654,7 @@ func (q *Queries) UpdateUserSystemRole(ctx context.Context, arg UpdateUserSystem
 		&i.IsSuspended,
 		&i.SuspendedAt,
 		&i.SuspensionReason,
+		&i.WhatsNewSeenVersion,
 	)
 	return i, err
 }

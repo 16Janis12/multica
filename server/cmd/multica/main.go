@@ -52,8 +52,10 @@ func init() {
 	projectCmd.GroupID = groupCore
 	epicCmd.GroupID = groupCore
 	sprintCmd.GroupID = groupCore
+	workflowCmd.GroupID = groupCore
 	labelCmd.GroupID = groupCore
 	propertyCmd.GroupID = groupCore
+	viewCmd.GroupID = groupCore
 	agentCmd.GroupID = groupCore
 	autopilotCmd.GroupID = groupCore
 	workspaceCmd.GroupID = groupCore
@@ -80,8 +82,10 @@ func init() {
 	rootCmd.AddCommand(projectCmd)
 	rootCmd.AddCommand(epicCmd)
 	rootCmd.AddCommand(sprintCmd)
+	rootCmd.AddCommand(workflowCmd)
 	rootCmd.AddCommand(labelCmd)
 	rootCmd.AddCommand(propertyCmd)
+	rootCmd.AddCommand(viewCmd)
 	rootCmd.AddCommand(agentCmd)
 	rootCmd.AddCommand(autopilotCmd)
 	rootCmd.AddCommand(workspaceCmd)

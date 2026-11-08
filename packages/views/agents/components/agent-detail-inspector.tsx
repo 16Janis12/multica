@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type {
   Agent,
+  AgentConversationStarter,
   AgentRuntime,
   MemberWithUser,
 } from "@multica/core/types";
@@ -12,28 +12,26 @@ import {
   AGENT_MAX_CONCURRENT_TASKS_MAX,
   AGENT_MAX_CONCURRENT_TASKS_MIN,
 } from "@multica/core/agents";
-import {
-  isRuntimeUsableForUser,
-  runtimeModelsOptions,
-} from "@multica/core/runtimes";
+import { useConfigStore } from "@multica/core/config";
 import { isImeComposing } from "@multica/core/utils";
 import { Input } from "@multica/ui/components/ui/input";
 import { Textarea } from "@multica/ui/components/ui/textarea";
+import { cn } from "@multica/ui/lib/utils";
 import { AvatarUploadControl } from "../../common/avatar-upload-control";
 import {
   SettingsCard,
   SettingsRow,
   SettingsSaveState,
   SettingsSection,
+  type SettingsSaveStatus,
 } from "../../settings/components/settings-layout";
 import { useAutoSave } from "../../settings/components/use-auto-save";
 import { useT } from "../../i18n";
 import { CharCounter } from "./char-counter";
+import { ConversationStartersEditor } from "./conversation-starters-editor";
+import { NewChatPreview } from "./new-chat-preview";
+import { useConversationStartersFocus } from "./use-conversation-starters-focus";
 import { ModelPicker } from "./inspector/model-picker";
-import {
-  buildModelChangeUpdate,
-  type ModelCatalog,
-} from "./inspector/model-change-cleanup";
 import { RuntimePicker } from "./inspector/runtime-picker";
 import { RuntimeCandidatePoolPicker } from "./inspector/runtime-candidate-pool-picker";
 import {
@@ -43,9 +41,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@multica/ui/components/ui/select";
+import { Switch } from "@multica/ui/components/ui/switch";
 import { ThinkingSettingField } from "./inspector/thinking-prop-row";
 import { ServiceTierSettingField } from "./inspector/service-tier-setting-field";
-import { Switch } from "@multica/ui/components/ui/switch";
+import { useExecutionControls } from "./inspector/use-execution-controls";
 
 interface InspectorProps {
   agent: Agent;
@@ -64,6 +63,22 @@ interface ProfileDraft {
 
 function profileDraftsEqual(left: ProfileDraft, right: ProfileDraft) {
   return left.name === right.name && left.description === right.description;
+}
+
+function startersEqual(
+  left: AgentConversationStarter[],
+  right: AgentConversationStarter[],
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function combinedSaveStatus(
+  ...statuses: SettingsSaveStatus[]
+): SettingsSaveStatus {
+  for (const status of ["error", "saving", "saved"] as const) {
+    if (statuses.includes(status)) return status;
+  }
+  return "idle";
 }
 
 /**
@@ -89,10 +104,14 @@ export function AgentDetailInspector({
 
   const [name, setName] = useState(agent.name);
   const [description, setDescription] = useState(agent.description ?? "");
+  const [starters, setStarters] = useState<AgentConversationStarter[]>(
+    agent.conversation_starters ?? [],
+  );
 
   useEffect(() => {
     setName(agent.name);
     setDescription(agent.description ?? "");
+    setStarters(agent.conversation_starters ?? []);
     // Reset only when moving to another agent. Cache updates from this form
     // must not erase a newer local draft while an autosave is in flight.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,40 +145,39 @@ export function AgentDetailInspector({
     isEqual: profileDraftsEqual,
   });
 
-  const isOnline = runtime?.status === "online";
-  const canReadRuntime =
-    runtime != null && isRuntimeUsableForUser(runtime, currentUserId);
-  const canDiscoverRuntimeModels = isOnline && canReadRuntime;
+  const {
+    qoderRuntime,
+    canDiscoverRuntimeModels,
+    runtimeOptions,
+    changeModel,
+    changeRuntime,
+  } = useExecutionControls({ agent, runtime, runtimes, currentUserId, update });
+  const conversationStartersEnabled = useConfigStore(
+    (state) => state.agentConversationStartersSupported,
+  );
+  const showStarters = conversationStartersEnabled;
+  const startersComplete = starters.every(
+    (item) => item.label.trim() && item.prompt.trim(),
+  );
+  const savedStarters = useMemo(
+    () => agent.conversation_starters ?? [],
+    [agent.conversation_starters],
+  );
+  const saveStarters = useCallback(
+    async (next: AgentConversationStarter[]) => {
+      await update({ conversation_starters: next });
+    },
+    [update],
+  );
+  const startersAutoSave = useAutoSave({
+    value: starters,
+    savedValue: savedStarters,
+    onSave: saveStarters,
+    enabled: canEdit && showStarters && startersComplete,
+    isEqual: startersEqual,
+  });
+  const startersFocus = useConversationStartersFocus(agent.id, showStarters);
   const nameInvalid = name.trim().length === 0;
-
-  // Same query the Thinking / Speed fields already use, so switching model
-  // costs no extra request. `null` = not authoritative (offline runtime, still
-  // loading, or discovery failed) and must not trigger any clearing.
-  const modelsQuery = useQuery(
-    runtimeModelsOptions(canDiscoverRuntimeModels ? agent.runtime_id : null),
-  );
-  const modelCatalog = useMemo<ModelCatalog>(
-    () =>
-      modelsQuery.isSuccess
-        ? modelsQuery.data.supported
-          ? modelsQuery.data.models
-          : []
-        : null,
-    [modelsQuery.data, modelsQuery.isSuccess],
-  );
-  const handleModelChange = useCallback(
-    (model: string) =>
-      update(
-        buildModelChangeUpdate({
-          provider: runtime?.provider ?? "",
-          model,
-          thinkingLevel: agent.thinking_level ?? "",
-          serviceTier: agent.service_tier ?? "",
-          catalog: modelCatalog,
-        }),
-      ),
-    [agent.service_tier, agent.thinking_level, modelCatalog, runtime?.provider, update],
-  );
 
   const canEditPool = canEdit || (Boolean(agent.allow_member_candidates) && Boolean(currentUserId));
 
@@ -174,258 +192,295 @@ export function AgentDetailInspector({
 
   return (
     <div className="space-y-8">
-      <SettingsSection
-        title={t(($) => $.inspector.section_profile)}
-        action={
-          <SettingsSaveState
-            status={profileAutoSave.status}
-            savingLabel={ts(($) => $.auto_save.saving)}
-            savedLabel={ts(($) => $.auto_save.saved)}
-            errorLabel={ts(($) => $.auto_save.failed)}
-          />
-        }
-      >
-        <SettingsCard>
-          <SettingsRow
-            label={t(($) => $.inspector.avatar_label)}
-            size="none"
-          >
-            <div className="flex justify-start sm:justify-end">
-              <AvatarUploadControl
-                variant="agent"
-                value={agent.avatar_url ?? null}
-                name={agent.name}
-                size={56}
-                disabled={!canEdit}
-                onUploaded={(url) => update({ avatar_url: url })}
-                onEmojiSelected={(value) => update({ avatar_url: value })}
+      <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-8">
+          <SettingsSection
+            title={t(($) => $.inspector.section_profile)}
+            action={
+              <SettingsSaveState
+                status={combinedSaveStatus(
+                  profileAutoSave.status,
+                  startersAutoSave.status,
+                )}
+                savingLabel={ts(($) => $.auto_save.saving)}
+                savedLabel={ts(($) => $.auto_save.saved)}
+                errorLabel={ts(($) => $.auto_save.failed)}
               />
-            </div>
-          </SettingsRow>
-
-          <SettingsRow
-            label={t(($) => $.inspector.name_label)}
-            size="text"
-          >
-            <div>
-              <Input
-                type="text"
-                name="agent-name"
-                autoComplete="off"
-                aria-label={t(($) => $.inspector.name_label)}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                onBlur={profileAutoSave.flush}
-                disabled={!canEdit}
-                aria-invalid={nameInvalid || undefined}
-              />
-              {nameInvalid ? (
-                <p className="mt-1 text-caption text-destructive">
-                  {t(($) => $.inspector.rename_required)}
-                </p>
-              ) : null}
-            </div>
-          </SettingsRow>
-
-          <SettingsRow
-            label={t(($) => $.inspector.description_label)}
-            size="text"
-            align="start"
-          >
-            <div>
-              <Textarea
-                name="agent-description"
-                autoComplete="off"
-                aria-label={t(($) => $.inspector.description_label)}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                onBlur={profileAutoSave.flush}
-                disabled={!canEdit}
-                rows={5}
-                maxLength={AGENT_DESCRIPTION_MAX_LENGTH}
-                className="resize-y"
-                placeholder={t(($) => $.inspector.description_placeholder)}
-              />
-              <CharCounter
-                length={[...description].length}
-                max={AGENT_DESCRIPTION_MAX_LENGTH}
-              />
-            </div>
-          </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection
-        title={t(($) => $.inspector.section_execution)}
-      >
-        <SettingsCard>
-          <SettingsRow
-            label={t(($) => $.inspector.prop_runtime)}
-            size="select-wide"
-          >
-            <RuntimePicker
-              variant="field"
-              showLabel={false}
-              value={agent.runtime_id}
-              runtimes={runtimes}
-              members={members}
-              currentUserId={currentUserId}
-              canEdit={canEdit}
-              // Model, thinking level, and service tier are runtime/model
-              // native. Clear them together so the new runtime resolves its
-              // own defaults instead of inheriting incompatible tokens.
-              onChange={(id) =>
-                update({
-                  runtime_id: id,
-                  model: "",
-                  thinking_level: "",
-                  service_tier: "",
-                })
-              }
-            />
-          </SettingsRow>
-          <SettingsRow
-            label="Candidate Pool"
-            size="select-wide"
-          >
-            <div className="space-y-1.5">
-              <RuntimeCandidatePoolPicker
-                candidateIds={agent.runtime_candidate_ids ?? []}
-                defaultRuntimeId={agent.runtime_id}
-                runtimes={runtimes}
-                members={members}
-                currentUserId={currentUserId}
-                canEdit={canEditPool}
-                isOwnerOrAdmin={canEdit}
-                onChange={(ids) => update({ runtime_candidate_ids: ids })}
-              />
-              {hasCrossProviderCandidates && (
-                <p className="text-xs text-muted-foreground">
-                  Cross-provider runtimes will fall back to their native default model if the selected model is incompatible.
-                </p>
-              )}
-              {!canEdit && canEditPool && (
-                <p className="text-xs text-muted-foreground">
-                  You can contribute your own runtimes to this candidate pool.
-                </p>
-              )}
-            </div>
-          </SettingsRow>
-          <SettingsRow
-            label="Allow Member Runtimes"
-            size="select-wide"
-          >
-            <div className="flex items-center justify-between py-1">
-              <div className="space-y-0.5">
-                <span className="text-caption text-foreground">
-                  Allow teammates to add runtimes
-                </span>
-                <p className="text-micro text-muted-foreground">
-                  Permit other workspace members to contribute their own runtimes to this pool.
-                </p>
-              </div>
-              <Switch
-                aria-label="Allow teammates to add runtimes"
-                checked={agent.allow_member_candidates ?? false}
-                onCheckedChange={(checked) =>
-                  update({ allow_member_candidates: checked })
-                }
-                disabled={!canEdit}
-              />
-            </div>
-          </SettingsRow>
-          {(agent.runtime_candidate_ids && agent.runtime_candidate_ids.length > 0) && (
-            <SettingsRow
-              label="Routing Strategy"
-              size="select-wide"
-            >
-              <Select
-                value={agent.routing_strategy || "capacity_headroom"}
-                onValueChange={(val) => {
-                  if (val) update({ routing_strategy: val });
-                }}
-                disabled={!canEdit}
-                items={[
-                  { value: "capacity_headroom", label: "Capacity Headroom (Balances Quota & Headroom)" },
-                  { value: "least_busy", label: "Least Busy (Balances Active Task Count)" },
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="capacity_headroom">
-                    Capacity Headroom (Balances Quota & Headroom)
-                  </SelectItem>
-                  <SelectItem value="least_busy">
-                    Least Busy (Balances Active Task Count)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </SettingsRow>
-          )}
-          <SettingsRow
-            label={t(($) => $.inspector.prop_model)}
-            size="select-wide"
-          >
-            <ModelPicker
-              variant="field"
-              showLabel={false}
-              runtimeId={agent.runtime_id}
-              runtimeOnline={canDiscoverRuntimeModels}
-              value={agent.model ?? ""}
-              canEdit={canEdit}
-              onChange={handleModelChange}
-            />
-          </SettingsRow>
-          <ThinkingSettingField
-            label={t(($) => $.inspector.prop_thinking)}
-            runtimeId={agent.runtime_id}
-            runtimeOnline={canDiscoverRuntimeModels}
-            provider={runtime?.provider ?? ""}
-            model={agent.model ?? ""}
-            value={agent.thinking_level ?? ""}
-            canEdit={canEdit}
-            onChange={(thinkingLevel) =>
-              update({ thinking_level: thinkingLevel })
             }
-          />
-          <ServiceTierSettingField
-            label={t(($) => $.inspector.prop_speed)}
-            runtimeId={agent.runtime_id}
-            runtimeOnline={canDiscoverRuntimeModels}
-            provider={runtime?.provider ?? ""}
-            model={agent.model ?? ""}
-            value={agent.service_tier ?? ""}
-            canEdit={canEdit}
-            onChange={(serviceTier) => update({ service_tier: serviceTier })}
-          />
-          <SettingsRow
-            label={t(($) => $.inspector.prop_concurrency)}
-            size="select-wide"
           >
-            <ConcurrencyField
-              value={agent.max_concurrent_tasks}
-              canEdit={canEdit}
-              onSave={(next) => update({ max_concurrent_tasks: next })}
-            />
-          </SettingsRow>
-          <SettingsRow
-            label="Read-Only Mode"
-            description="Restricts this agent to read-only usage. File writes and shell executions are blocked."
-            size="select-wide"
+            <SettingsCard>
+              <SettingsRow
+                label={t(($) => $.inspector.avatar_label)}
+                size="none"
+              >
+                <div className="flex justify-start sm:justify-end">
+                  <AvatarUploadControl
+                    variant="agent"
+                    value={agent.avatar_url ?? null}
+                    name={agent.name}
+                    size={56}
+                    disabled={!canEdit}
+                    onUploaded={(url) => update({ avatar_url: url })}
+                    onEmojiSelected={(value) => update({ avatar_url: value })}
+                  />
+                </div>
+              </SettingsRow>
+
+              <SettingsRow
+                label={t(($) => $.inspector.name_label)}
+                size="text"
+              >
+                <div>
+                  <Input
+                    type="text"
+                    name="agent-name"
+                    autoComplete="off"
+                    aria-label={t(($) => $.inspector.name_label)}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    onBlur={profileAutoSave.flush}
+                    disabled={!canEdit}
+                    aria-invalid={nameInvalid || undefined}
+                  />
+                  {nameInvalid ? (
+                    <p className="mt-1 text-caption text-destructive">
+                      {t(($) => $.inspector.rename_required)}
+                    </p>
+                  ) : null}
+                </div>
+              </SettingsRow>
+
+              <SettingsRow
+                label={t(($) => $.inspector.description_label)}
+                size="text"
+                align="start"
+              >
+                <div>
+                  <Textarea
+                    name="agent-description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    disabled={!canEdit}
+                    placeholder={t(($) => $.inspector.description_placeholder)}
+                    aria-label={t(($) => $.inspector.description_label)}
+                    rows={3}
+                  />
+                  <CharCounter
+                    length={[...description].length}
+                    max={AGENT_DESCRIPTION_MAX_LENGTH}
+                  />
+                </div>
+              </SettingsRow>
+
+              {showStarters ? (
+                <div
+                  ref={startersFocus.ref}
+                  className={cn(
+                    "scroll-mt-4 transition-shadow duration-500",
+                    startersFocus.focused && "ring-2 ring-inset ring-brand/50",
+                  )}
+                >
+                  <SettingsRow
+                    label={t(($) => $.conversation_starters.label)}
+                    description={t(($) => $.conversation_starters.hint)}
+                    size="text"
+                    align="start"
+                  >
+                    <ConversationStartersEditor
+                      value={starters}
+                      onChange={setStarters}
+                      disabled={!canEdit}
+                    />
+                  </SettingsRow>
+                </div>
+              ) : null}
+            </SettingsCard>
+          </SettingsSection>
+
+          <SettingsSection
+            title={t(($) => $.inspector.section_execution)}
+            description={
+              qoderRuntime ? t(($) => $.inspector.qoder_execution_note) : undefined
+            }
           >
-            <div className="flex items-center justify-end py-1">
-              <Switch
-                checked={Boolean(agent.read_only)}
-                disabled={!canEdit}
-                onCheckedChange={(checked) => update({ read_only: checked })}
-                aria-label="Read-Only Mode"
-              />
-            </div>
-          </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
+            <SettingsCard>
+              <SettingsRow
+                label={t(($) => $.inspector.prop_runtime)}
+                size="select-wide"
+              >
+                <RuntimePicker
+                  variant="field"
+                  showLabel={false}
+                  value={agent.runtime_id}
+                  runtimes={runtimeOptions}
+                  members={members}
+                  currentUserId={currentUserId}
+                  canEdit={canEdit && !qoderRuntime}
+                  onChange={changeRuntime}
+                />
+              </SettingsRow>
+              {qoderRuntime ? null : (
+                <>
+                  <SettingsRow
+                    label="Candidate Pool"
+                    size="select-wide"
+                  >
+                    <div className="space-y-1.5">
+                      <RuntimeCandidatePoolPicker
+                        candidateIds={agent.runtime_candidate_ids ?? []}
+                        defaultRuntimeId={agent.runtime_id}
+                        runtimes={runtimes}
+                        members={members}
+                        currentUserId={currentUserId}
+                        canEdit={canEditPool}
+                        isOwnerOrAdmin={canEdit}
+                        onChange={(ids) => update({ runtime_candidate_ids: ids })}
+                      />
+                      {hasCrossProviderCandidates && (
+                        <p className="text-xs text-muted-foreground">
+                          Cross-provider runtimes will fall back to their native default model if the selected model is incompatible.
+                        </p>
+                      )}
+                      {!canEdit && canEditPool && (
+                        <p className="text-xs text-muted-foreground">
+                          You can contribute your own runtimes to this candidate pool.
+                        </p>
+                      )}
+                    </div>
+                  </SettingsRow>
+                  <SettingsRow
+                    label="Allow Member Runtimes"
+                    size="select-wide"
+                  >
+                    <div className="flex items-center justify-between py-1">
+                      <div className="space-y-0.5">
+                        <span className="text-caption text-foreground">
+                          Allow teammates to add runtimes
+                        </span>
+                        <p className="text-micro text-muted-foreground">
+                          Permit other workspace members to contribute their own runtimes to this pool.
+                        </p>
+                      </div>
+                      <Switch
+                        aria-label="Allow teammates to add runtimes"
+                        checked={agent.allow_member_candidates ?? false}
+                        onCheckedChange={(checked) =>
+                          update({ allow_member_candidates: checked })
+                        }
+                        disabled={!canEdit}
+                      />
+                    </div>
+                  </SettingsRow>
+                  {(agent.runtime_candidate_ids && agent.runtime_candidate_ids.length > 0) && (
+                    <SettingsRow
+                      label="Routing Strategy"
+                      size="select-wide"
+                    >
+                      <Select
+                        value={agent.routing_strategy || "capacity_headroom"}
+                        onValueChange={(val) => {
+                          if (val) update({ routing_strategy: val });
+                        }}
+                        disabled={!canEdit}
+                        items={[
+                          { value: "capacity_headroom", label: "Capacity Headroom (Balances Quota & Headroom)" },
+                          { value: "least_busy", label: "Least Busy (Balances Active Task Count)" },
+                        ]}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="capacity_headroom">
+                            Capacity Headroom (Balances Quota & Headroom)
+                          </SelectItem>
+                          <SelectItem value="least_busy">
+                            Least Busy (Balances Active Task Count)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  )}
+                  <SettingsRow
+                    label={t(($) => $.inspector.prop_model)}
+                    size="select-wide"
+                  >
+                    <ModelPicker
+                      variant="field"
+                      showLabel={false}
+                      runtimeId={agent.runtime_id}
+                      runtimeOnline={canDiscoverRuntimeModels}
+                      value={agent.model ?? ""}
+                      canEdit={canEdit}
+                      onChange={changeModel}
+                    />
+                  </SettingsRow>
+                  <ThinkingSettingField
+                    label={t(($) => $.inspector.prop_thinking)}
+                    runtimeId={agent.runtime_id}
+                    runtimeOnline={canDiscoverRuntimeModels}
+                    provider={runtime?.provider ?? ""}
+                    model={agent.model ?? ""}
+                    value={agent.thinking_level ?? ""}
+                    canEdit={canEdit}
+                    onChange={(thinkingLevel) =>
+                      update({ thinking_level: thinkingLevel })
+                    }
+                  />
+                  <ServiceTierSettingField
+                    label={t(($) => $.inspector.prop_speed)}
+                    runtimeId={agent.runtime_id}
+                    runtimeOnline={canDiscoverRuntimeModels}
+                    provider={runtime?.provider ?? ""}
+                    model={agent.model ?? ""}
+                    value={agent.service_tier ?? ""}
+                    canEdit={canEdit}
+                    onChange={(serviceTier) =>
+                      update({ service_tier: serviceTier })
+                    }
+                  />
+                </>
+              )}
+              <SettingsRow
+                label={t(($) => $.inspector.prop_concurrency)}
+                size="select-wide"
+              >
+                <ConcurrencyField
+                  value={agent.max_concurrent_tasks}
+                  canEdit={canEdit}
+                  onSave={(next) => update({ max_concurrent_tasks: next })}
+                />
+              </SettingsRow>
+              <SettingsRow
+                label="Read-Only Mode"
+                description="Restricts this agent to read-only usage. File writes and shell executions are blocked."
+                size="select-wide"
+              >
+                <div className="flex items-center justify-end py-1">
+                  <Switch
+                    checked={Boolean(agent.read_only)}
+                    disabled={!canEdit}
+                    onCheckedChange={(checked) => update({ read_only: checked })}
+                    aria-label="Read-Only Mode"
+                  />
+                </div>
+              </SettingsRow>
+            </SettingsCard>
+          </SettingsSection>
+        </div>
+
+        <SettingsSection
+          title={t(($) => $.conversation_starters.preview_label)}
+          className="hidden @4xl:sticky @4xl:top-0 @4xl:block"
+        >
+          <NewChatPreview
+            name={name.trim() || agent.name}
+            description={description}
+            avatarUrl={agent.avatar_url ?? null}
+            starters={showStarters ? starters : []}
+          />
+        </SettingsSection>
+      </div>
     </div>
   );
 }

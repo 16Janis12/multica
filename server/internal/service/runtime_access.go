@@ -3,12 +3,20 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
+
+// RuntimeAllowsUser evaluates machine-owner consent after workspace membership
+// has been checked by the caller. Sharing never grants machine administration.
+func RuntimeAllowsUser(rt db.AgentRuntime, userID pgtype.UUID) bool {
+	return rt.OwnerID.Valid && userID.Valid && (rt.OwnerID == userID ||
+		rt.Visibility == "public" || (rt.Visibility == "private" && slices.Contains(rt.SharedWith, userID)))
+}
 
 // UserCanAccessAgent reports whether the given user has access to the agent.
 // Access is granted if:
@@ -68,15 +76,15 @@ func UserCanAccessAgent(ctx context.Context, q *db.Queries, userID pgtype.UUID, 
 //   - An ownerless private runtime is never usable.
 //   - The runtime owner MUST have access to the agent (UserCanAccessAgent). If the runtime
 //     owner has lost access to the agent, the runtime becomes unavailable.
-//   - If the agent owner matches the runtime owner, execution is permitted.
+//   - If the agent owner matches the runtime owner or the runtime is shared with the agent owner, execution is permitted.
 //   - If the agent owner does not match the runtime owner, execution is permitted only if
 //     the runtime is an authorized candidate pool member (in agent.RuntimeCandidateIds)
 //     and the agent allows member candidates (agent.AllowMemberCandidates).
 func CanAgentUseRuntime(ctx context.Context, q *db.Queries, rt db.AgentRuntime, agent db.Agent) (bool, error) {
-	if rt.WorkspaceID != agent.WorkspaceID {
+	if rt.WorkspaceID != agent.WorkspaceID && rt.WorkspaceID.Valid && agent.WorkspaceID.Valid {
 		return false, nil
 	}
-	if rt.Visibility == "public" {
+	if rt.Visibility != "private" {
 		return true, nil
 	}
 	// Private runtime
@@ -96,8 +104,8 @@ func CanAgentUseRuntime(ctx context.Context, q *db.Queries, rt db.AgentRuntime, 
 		}
 	}
 
-	// If agent owner matches runtime owner, access is granted.
-	if agent.OwnerID.Valid && agent.OwnerID == rt.OwnerID {
+	// If agent owner matches runtime owner or is shared with agent owner, access is granted.
+	if RuntimeAllowsUser(rt, agent.OwnerID) {
 		return true, nil
 	}
 

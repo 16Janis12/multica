@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/multica-ai/multica/server/internal/dispatch"
@@ -180,28 +181,23 @@ func runtimeVerdict(rt db.AgentRuntime, agent db.Agent) AgentVerdict {
 }
 
 func runtimeVerdictWithContext(ctx context.Context, q *db.Queries, rt db.AgentRuntime, agent db.Agent) AgentVerdict {
-	if q != nil {
-		canUse, err := CanAgentUseRuntime(ctx, q, rt, agent)
-		if err != nil || !canUse {
-			detail := "agent owner does not match private runtime owner"
-			if rt.Visibility == "private" && rt.OwnerID.Valid {
-				if hasAccess, _ := UserCanAccessAgent(ctx, q, rt.OwnerID, agent); !hasAccess {
-					detail = "runtime owner does not have access to this agent"
+	if rt.Visibility == "private" && rt.OwnerID.Valid {
+		if q != nil {
+			if hasAccess, _ := UserCanAccessAgent(ctx, q, rt.OwnerID, agent); !hasAccess {
+				return AgentVerdict{
+					Availability: AgentBlocked,
+					Reason:       dispatch.ReasonRuntimeAccessDenied,
+					Detail:       "runtime owner does not have access to this agent",
 				}
 			}
-			return AgentVerdict{
-				Availability: AgentBlocked,
-				Reason:       dispatch.ReasonRuntimeAccessDenied,
-				Detail:       detail,
-			}
 		}
-	} else {
-		canUse, _ := CanAgentUseRuntime(ctx, nil, rt, agent)
+		canUse := RuntimeAllowsUser(rt, agent.OwnerID) ||
+			(agent.AllowMemberCandidates && slices.Contains(agent.RuntimeCandidateIds, rt.ID))
 		if !canUse {
 			return AgentVerdict{
 				Availability: AgentBlocked,
 				Reason:       dispatch.ReasonRuntimeAccessDenied,
-				Detail:       "agent owner does not match private runtime owner",
+				Detail:       "agent owner does not have access to the private runtime",
 			}
 		}
 	}
@@ -313,7 +309,7 @@ func RuntimeUnusableNotice(agentName string, verdict AgentVerdict) string {
 	}
 	if verdict.Reason == dispatch.ReasonRuntimeAccessDenied {
 		return fmt.Sprintf(
-			"%s cannot run on this private runtime, so this trigger was not queued. Make the runtime's machine public, or rebind/copy the agent to a runtime its owner can use.",
+			"%s cannot run on this private runtime, so this trigger was not queued. Ask its owner to share the runtime with the agent owner or make it public, or rebind/copy the agent to a runtime its owner can use.",
 			name,
 		)
 	}
@@ -337,7 +333,7 @@ func RuntimeUnusableNotice(agentName string, verdict AgentVerdict) string {
 }
 
 // runtimeProfileMissingNotice explains a runtime whose CLI runs but whose
-// Multica runtime profile is absent.
+// Multica runtime profile is absent or needs manual migration.
 //
 // No fenced command, deliberately. The install is `dsh plugin --profile multica
 // add <bundle>`, and <bundle> is the operator's own choice of package,
@@ -348,8 +344,9 @@ func RuntimeUnusableNotice(agentName string, verdict AgentVerdict) string {
 // bundle, and pointing at the docs that list them, is the honest version.
 func runtimeProfileMissingNotice(name string) string {
 	return fmt.Sprintf(
-		"%s could not start: the DeepSeek Harness CLI is installed on that machine, but the `multica` runtime profile it needs is not, so this trigger was not queued.\n\n"+
-			"The profile supplies the protocol Multica drives — the CLI itself is fine, and reinstalling it changes nothing. On that machine, either add the Multica DSH runtime bundle to the profile with `dsh plugin --profile multica add`, or set `MULTICA_DSH_PROFILE_BUNDLE` for the daemon so it installs the bundle itself. See the agent runtime install docs for the bundle to use.\n\n"+
+		"%s could not start: the DeepSeek Harness CLI is installed on that machine, but its `multica` runtime profile is missing or needs migration, so this trigger was not queued.\n\n"+
+			"Build a compatible `@multica-ai/dsh-runtime` bundle from [multica-ai/dsh-multica-runtime](https://github.com/multica-ai/dsh-multica-runtime#local-development), following its README's DSH version requirements. For a missing profile, install the built directory or tarball with `dsh plugin --profile multica add`, or set `MULTICA_DSH_PROFILE_BUNDLE` for the daemon to install it.\n\n"+
+			"For an existing bridge configuration, back up the profile and install the compatible bundle manually. In `dsh.profile.bundles`, replace `dsh-profile-multica` with `@multica-ai/dsh-runtime`; if both are listed, remove `dsh-profile-multica`. If the first-party runtime is only in `dependencies`, add it to `dsh.profile.bundles`. `MULTICA_DSH_PROFILE_BUNDLE` will not migrate an existing bridge configuration.\n\n"+
 			"The runtime registers on its own within a couple of minutes after that; trigger the agent again then.",
 		name,
 	)
