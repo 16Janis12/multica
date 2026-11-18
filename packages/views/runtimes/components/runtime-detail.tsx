@@ -25,6 +25,7 @@ import {
   runtimeDisplayName,
   runtimeProfileListOptions,
 } from "@multica/core/runtimes";
+import { runtimeReportsRateLimits } from "@multica/core/runtimes/rate-limits";
 import {
   type AgentPresenceDetail,
   useWorkspacePresenceMap,
@@ -55,6 +56,7 @@ import { HealthBadge, HealthIcon, shortDaemonId, useHealthLabel } from "./shared
 import { ProviderLogo } from "./provider-logo";
 import { UsageSection } from "./usage-section";
 import { RuntimeCapacityCard } from "./runtime-capacity-card";
+import { RateLimitSection } from "./rate-limit-section";
 import { DeleteRuntimeDialog } from "./delete-runtime-dialog";
 import { RuntimeAccessEditor, RuntimeAccessReadout } from "./runtime-access-editor";
 import { RuntimeConcurrencyField } from "./runtime-concurrency-field";
@@ -168,6 +170,7 @@ export function RuntimeDetail({
   return (
     <>
       <ObjectPage
+        type="runtime"
         layoutId="multica_runtime_detail_layout"
         segments={[
           { href: paths.runtimes(), label: t(($) => $.page.title) },
@@ -231,6 +234,12 @@ export function RuntimeDetail({
               agentHref={(id) => paths.agentDetail(id)}
             />
           </ObjectSection>
+
+          {canReadRuntime && runtimeReportsRateLimits(runtime.provider) && (
+            <ObjectSection title={t(($) => $.rate_limits.title)}>
+              <RateLimitSection runtime={runtime} />
+            </ObjectSection>
+          )}
 
           {canReadRuntime && (
             <ObjectSection title="Live Capacity">
@@ -365,8 +374,9 @@ function RuntimeProperties({
         </ObjectProperty>
         <ObjectProperty label={t(($) => $.detail.fact_device)}>
           {device?.hostname ? (
-            <TruncatedTooltip content={device.hostname}>
-              <span className="block truncate font-mono">{device.hostname}</span>
+            <TruncatedTooltip content={device.hostname} focusable>
+              {/* The value column clips, so the focus ring draws inside. */}
+              <span className="block truncate font-mono focus-visible:ring-2 focus-visible:ring-inset">{device.hostname}</span>
             </TruncatedTooltip>
           ) : (
             <span className="text-muted-foreground">—</span>
