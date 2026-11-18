@@ -302,6 +302,24 @@ export function createEnDict(): LandingDict {
     },
     entries: [
       {
+        version: "0.11.1",
+        date: "2026-11-18",
+        title: "Warm Antigravity ACP Session Reuse, Epics & Sprints, Dynamic Runtime Candidate Routing & Upstream Sync",
+        changes: [],
+        features: [
+          "Warm Antigravity ACP Sessions: reuse warm ACP agent sessions across follow-up turns to eliminate startup latency and keep context warm.",
+          "Interactive Epics & Sprints: create and configure epics and sprints directly from issue headers, dropdown selectors, and command palette shortcuts (`new-epic`, `new-sprint`).",
+          "Dynamic Candidate Runtime Routing: distribute task execution across candidate runtime pools with automatic cross-provider fallback, member runtime contribution, and live capacity tracking.",
+          "Self-Host Governance: instance-level administration and restriction governance for self-hosted deployments.",
+        ],
+        improvements: [
+          "Upstream v0.11.0 parity: includes WeChat agent integration, reporting back from chat, running reply instructions, and project folder grouping.",
+        ],
+        fixes: [
+          "In-app attachment viewer fixes for editor links.",
+        ],
+      },
+      {
         version: "0.11.0",
         date: "2026-11-18",
         title: "Agents on WeChat, chat agents that report back, adding to a running reply, and project folders",
