@@ -572,8 +572,6 @@ export function ActorSubContent({
 
 // Project sub-menu content
 
-<<<<<<< HEAD
-
 // Epic sub-menu content
 
 function EpicSubContent({
