@@ -613,6 +613,39 @@ type antigravityStreamEvent struct {
 	Result     *antigravityStreamResult     `json:"result"`
 }
 
+type antigravityStepSummary struct {
+	kind, state string
+	hasText     bool
+}
+
+type antigravityTurn struct {
+	start   *int
+	steps   map[int]antigravityStepSummary
+	invalid bool
+}
+
+func (t *antigravityTurn) settledResponse() int {
+	latest := -1
+	for index, step := range t.steps {
+		if step.kind == "agent_response" && index > latest {
+			latest = index
+		}
+	}
+	for index, step := range t.steps {
+		if index > latest && (step.state != "DONE" || step.kind == "error_message" ||
+			step.kind == "tool" || step.kind == "subagent" || step.kind == "agent_response" || step.kind == "user_input") {
+			return -1
+		}
+	}
+	return latest
+}
+
+func (t *antigravityTurn) completed(response string) bool {
+	latest := t.settledResponse()
+	return !t.invalid && strings.TrimSpace(response) != "" && t.start != nil && t.steps[*t.start].state == "DONE" &&
+		latest > *t.start && t.steps[latest].state == "DONE" && t.steps[latest].hasText
+}
+
 // antigravityNetworkIssueError is the provider sentence some agy releases
 // report when a trailing round trip fails. It carries no Go error text, so it
 // has to stay a literal match alongside the transport patterns below.
@@ -753,6 +786,10 @@ func (b *antigravityBackend) executeCLI(ctx context.Context, prompt string, opts
 	logPath := logFile.Name()
 	_ = logFile.Close()
 
+	if opts.SkillInvocation != nil {
+		prompt = opts.SkillInvocation.antigravityPrompt(supportsAntigravitySlashSkills(runCtx, b.cfg, execPath, opts))
+	}
+
 	args := buildAntigravityArgs(prompt, logPath, timeout, opts, b.cfg.Logger)
 
 	cmd := b.cfg.commandAt(execPath).exec(runCtx, args...)
@@ -805,8 +842,7 @@ func (b *antigravityBackend) executeCLI(ctx context.Context, prompt string, opts
 		var streamResultUsage *antigravityStreamUsage
 		streamStepUsage := make(map[int]TokenUsage)
 		streamTools := make(map[int]antigravityToolState)
-		streamLatestAgentResponseStep := -1
-		streamLatestAgentResponseDone := false
+		turn := antigravityTurn{steps: make(map[int]antigravityStepSummary)}
 		finalStatus := "completed"
 		var finalError string
 
@@ -825,7 +861,21 @@ func (b *antigravityBackend) executeCLI(ctx context.Context, prompt string, opts
 					streamModel = event.Init.Model
 				case "step_update":
 					if event.StepUpdate == nil {
+						turn.invalid = true
 						continue
+					}
+					step := event.StepUpdate
+					if idx := step.StepIndex; idx == nil || *idx < 0 {
+						turn.invalid = true
+					} else {
+						if step.StepType == "user_input" {
+							turn.invalid = turn.invalid || turn.start != nil && *turn.start != *idx
+							turn.start = idx
+						}
+						turn.steps[*idx] = antigravityStepSummary{
+							kind: step.StepType, state: strings.ToUpper(step.State),
+							hasText: turn.steps[*idx].hasText || strings.TrimSpace(step.TextDelta) != "",
+						}
 					}
 					if event.StepUpdate.ConversationID != "" {
 						streamSessionID = event.StepUpdate.ConversationID
@@ -837,10 +887,7 @@ func (b *antigravityBackend) executeCLI(ctx context.Context, prompt string, opts
 							break streamLoop
 						}
 					}
-					if event.StepUpdate.StepType == "agent_response" && event.StepUpdate.StepIndex != nil && *event.StepUpdate.StepIndex >= streamLatestAgentResponseStep {
-						streamLatestAgentResponseStep = *event.StepUpdate.StepIndex
-						streamLatestAgentResponseDone = strings.EqualFold(event.StepUpdate.State, "done")
-					}
+
 					if event.StepUpdate.StepType == "agent_response" && event.StepUpdate.TextDelta != "" {
 						output.WriteString(event.StepUpdate.TextDelta)
 						trySend(msgCh, Message{Type: MessageText, Content: event.StepUpdate.TextDelta})
@@ -894,11 +941,12 @@ func (b *antigravityBackend) executeCLI(ctx context.Context, prompt string, opts
 			finalStatus = "aborted"
 			finalError = "execution cancelled"
 		} else if status := antigravityResultStatus(streamResultStatus); finalStatus == "completed" && status != "completed" {
-			if antigravityCompletedDespiteTrailingNetworkError(streamResultError, streamResponse, streamLatestAgentResponseDone, waitErr == nil) {
-				// agy can emit a complete DONE response and only then fail a
-				// follow-up network operation. Preserve the finished answer instead
-				// of presenting that trailing transport error as a failed turn.
-				b.cfg.Logger.Warn("agy reported a trailing network error after a completed response", "err", streamResultError)
+			recovered := strings.EqualFold(strings.TrimSpace(streamResultStatus), "ERROR") && waitErr == nil && turn.completed(streamResponse)
+			if latest := turn.settledResponse(); turn.start == nil && latest >= 0 {
+				recovered = antigravityCompletedDespiteTrailingNetworkError(streamResultError, streamResponse, turn.steps[latest].state == "DONE", waitErr == nil)
+			}
+			if recovered {
+				b.cfg.Logger.Warn("agy reported an error after a completed response", "err", streamResultError)
 			} else {
 				finalStatus = status
 				finalError = streamResultError

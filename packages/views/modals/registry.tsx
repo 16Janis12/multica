@@ -13,10 +13,12 @@ import { MarkDuplicateIssueModal } from "./mark-duplicate-issue";
 import { AddChildIssueModal } from "./add-child-issue";
 import { AddProjectIssueModal } from "./add-project-issue";
 import { RenameIssueModal } from "./rename-issue";
+import { RenameProjectModal } from "./rename-project";
+import { getProjectFoldersExtension } from "../extensions";
 import { DeleteIssueConfirmModal } from "./delete-issue-confirm";
 import { RunConfirmModal } from "./run-confirm";
 import { WorkflowHandoffModal } from "./workflow-handoff";
-import { IssueLimitUpgradeDialog } from "./issue-limit-upgrade-dialog";
+import { LimitRecoveryDialog } from "./limit-recovery-dialog";
 
 export function ModalRegistry() {
   const modal = useModalStore((s) => s.modal);
@@ -46,7 +48,7 @@ export function ModalRegistry() {
       );
       break;
     case "create-project":
-      activeModal = <CreateProjectModal onClose={close} />;
+      activeModal = <CreateProjectModal onClose={close} data={data} />;
       break;
     case "create-epic":
       activeModal = <CreateEpicModal onClose={close} data={data} />;
@@ -72,6 +74,9 @@ export function ModalRegistry() {
     case "project-add-issue":
       activeModal = <AddProjectIssueModal onClose={close} data={data} />;
       break;
+    case "project-rename":
+      activeModal = <RenameProjectModal onClose={close} data={data} />;
+      break;
     case "issue-rename":
       activeModal = <RenameIssueModal onClose={close} data={data} />;
       break;
@@ -86,10 +91,13 @@ export function ModalRegistry() {
       break;
   }
 
+  const FoldersHost = getProjectFoldersExtension()?.Host;
+
   return (
     <>
       {activeModal}
-      <IssueLimitUpgradeDialog />
+      <LimitRecoveryDialog />
+      {FoldersHost && <FoldersHost />}
     </>
   );
 }

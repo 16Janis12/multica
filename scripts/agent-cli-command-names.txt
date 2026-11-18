@@ -1,5 +1,6 @@
 agy
 agy_acp_server
+amp
 claude
 codebuddy
 codearts
@@ -24,6 +25,7 @@ qodercli
 qoderclicn
 qwen
 qwenpaw
+droid
 reasonix
 traecli
 zeroclaw
